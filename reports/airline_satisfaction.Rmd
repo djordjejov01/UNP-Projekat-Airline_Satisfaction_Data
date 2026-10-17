@@ -1,11 +1,239 @@
 ---
-title: "Seminarski rad - Analiza zadovoljstva putnika"
-output: html_document
-date: "`r Sys.Date()`"
+title: "Airline satisfaction data"
+output:
+  word_document: 
+    reference_docx: template.docx
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = TRUE,        # prikazuje kod u dokumentu
+  warning = FALSE,    # sakriva upozorenja (npr. od ggplot-a)
+  message = FALSE,    # sakriva poruke (npr. od library())
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 5
+)
+
+library(tidyverse)
 ```
+
+
+# Uvod
+
+Zadovoljstvo putnika predstavlja jedan od ključnih pokazatelja uspešnosti aviokompanija. U savremenom tržištu avio-saobraćaja, gde konkurencija između kompanija neprestano raste, razumevanje faktora koji utiču na zadovoljstvo putnika direktno utiče na poslovne odluke, strategije unapređenja usluga i, na kraju, na lojalnost klijenata. Zadovoljan putnik je skloniji ponovnom korišćenju usluga iste kompanije, ostavljanju pozitivnih ocena i preporučivanju kompanije drugima.
+
+Sa druge strane, nezadovoljstvo putnika može dovesti do gubitka klijenata, negativnih recenzija i smanjenja prihoda. Zbog toga aviokompanije ulažu značajne napore u prikupljanje povratnih informacija od putnika, kako bi identifikovale oblasti u kojima je potrebno poboljšanje.
+
+Za potrebe ovog istraživanja korišćen je R programski jezik, zbog bogatog izbora biblioteka za statističku analizu, obradu podataka, vizualizaciju i mašinsko učenje.
+
+## Opis problema i motivacija
+
+Problem predviđanja zadovoljstva putnika je kompleksan, jer na njega utiče veliki broj faktora – od udobnosti sedišta, preko brzine internet konekcije i kvaliteta hrane, do kašnjenja leta i usluge osoblja. Neki od tih faktora se mogu kvantifikovati i meriti, dok neki ostaju subjektivni i teško ih je obuhvatiti podacima.
+
+Glavni cilj ovog rada je:
+
+1. Analiza skupa podataka o zadovoljstvu putnika u avio-saobraćaju,
+2. Identifikacija najvažnijih faktora koji utiču na zadovoljstvo,
+3. Izgradnja modela mašinskog učenja koji može da predvidi da li će putnik biti zadovoljan ili nezadovoljan na osnovu dostupnih karakteristika.
+
+## Izvor podataka
+
+Za potrebe istraživanja korišćen je skup podataka **Airline Satisfaction Data**, preuzet sa platforme Kaggle ([link](https://www.kaggle.com/datasets/arseniyshutko/binary-aviation-satisfaction-129k)). Skup sadrži oko 129.000 redova i 22 kolone, koje uključuju demografske podatke o putnicima (pol, starost, tip putnika), podatke o letu (klasa, tip putovanja, distanca, kašnjenje) i ocene zadovoljstva različitim aspektima usluge.
+
+Ciljna promenljiva je **Satisfaction**, koja ima dve vrednosti: *Satisfied* i *Not Satisfied*.
+
+# Pregled podataka
+
+## Učitavanje podataka
+
+```{r}
+data=read.csv("../data/data.csv",stringsAsFactors = FALSE) #korišćenjem argumenta stringAsFactors i postavljanjem njegove vrednosti na FALSE omogućava nam da sve string promenljive inicijalno ne transformiše u faktore proizvoljno, nego da ih ostavlja u string obliku, što ide u prilog tome da mi možemo sami faktorisati promenljive u zavisnosti od potrebe u kodu.  
+```
+
+
+Ispis prvih nekoliko redova skupa podataka:
+
+```{r}
+head(data)
+``` 
+
+Nakon učitavanja podataka, funcijom str proveravamo strukturu podataka.
+Ovo nam pomaže da unapred uočimo koje su promenljive numeričke, a koje kategorijske, kao i da li postoje promenljive koje treba dodatno obraditi (npr. konverzija tipa ili faktorizacija).
+
+
+## Struktura podataka
+```{r}
+str(data)
+```
+
+Iz izlaza možemo da zaključimo:
+
+- Skup sadrži **129.880 redova** i **22 promenljive**.
+- **5 promenljivih je tekstualnog tipa** (`chr`).
+- **16 promenljivih je celobrojnog tipa** (`int`).
+- **1 promenljiva je decimalnog tipa** (`num`).
+- Ciljna promenljiva `satisfaction` je tekstualnog tipa sa vrednostima `"True"` i `"False"`.
+
+Na osnovu tipova promenljivih, možemo ih podeliti u dve osnovne grupe:
+
+**Kategorijske promenljive (5):**
+- `Gender`, `Customer.Type`, `Type.of.Travel`, `Class`, `satisfaction`
+
+**Numeričke promenljive (17):**
+- `Age`, `Flight.Distance`, sve ocene usluga (14 kolona), `Departure.Delay.in.Minutes`, `Arrival.Delay.in.Minutes`
+
+## Opis kolona
+
+Spisak kolona koje skup sadrži i kratak opis:
+
+1. **Gender** – Pol putnika (Female ili Male).
+
+2. **Customer.Type** – Tip putnika u odnosu na lojalnost aviokompaniji (Loyal Customer ili disloyal Customer).
+
+3. **Age** – Starost putnika u godinama.
+
+4. **Type.of.Travel** – Svrha putovanja (Personal Travel ili Business travel).
+
+5. **Class** – Klasa leta (Business, Eco ili Eco Plus).
+
+6. **Flight.Distance** – Distanca leta u miljama.
+
+7. **Inflight.wifi.service** – Ocena (0–5) zadovoljstva WiFi internet uslugom tokom leta. Vrednost 0 označava da usluga nije ocenjena.
+
+8. **Departure.Arrival.time.convenient** – Ocena (0–5) zadovoljstva pogodnošću vremena polaska i dolaska.
+
+9. **Ease.of.Online.booking** – Ocena (0–5) zadovoljstva procesom online rezervacije leta.
+
+10. **Gate.location** – Ocena (0–5) zadovoljstva lokacijom gejta za ukrcavanje.
+
+11. **Food.and.drink** – Ocena (0–5) zadovoljstva hranom i pićem tokom leta.
+
+12. **Online.boarding** – Ocena (0–5) zadovoljstva procesom online ukrcavanja.
+
+13. **Seat.comfort** – Ocena (0–5) udobnosti sedišta.
+
+14. **Inflight.entertainment** – Ocena (0–5) zadovoljstva sadržajem za zabavu tokom leta.
+
+15. **On.board.service** – Ocena (0–5) zadovoljstva uslugom osoblja u avionu.
+
+16. **Leg.room.service** – Ocena (0–5) zadovoljstva prostorom za noge.
+
+17. **Baggage.handling** – Ocena (0–5) zadovoljstva rukovanjem prtljagom.
+
+18. **Checkin.service** – Ocena (0–5) zadovoljstva uslugom prijave na let.
+
+19. **Cleanliness** – Ocena (0–5) zadovoljstva čistoćom kabine.
+
+20. **Departure.Delay.in.Minutes** – Kašnjenje na polasku izraženo u minutima.
+
+21. **Arrival.Delay.in.Minutes** – Kašnjenje na dolasku izraženo u minutima.
+
+22. **satisfaction** – Ciljna promenljiva koja označava zadovoljstvo putnika (True – zadovoljan, False – nezadovoljan).
+
+```{r}
+names(data)
+```
+
+
+Da bismo olakšali dalji rad i učinili kod čitljivijim, preimenovaćemo kolone u konzistentan format sa donjim crtama (`_`) umesto tačaka. Takođe, vodimo računa da svaki naziv počinje velikim slovom, radi konzistentnosti.
+
+
+```{r}
+names(data) <- c(
+  "Gender", "Customer_Type", "Age", "Type_of_Travel", "Class",
+  "Flight_Distance",
+  "Inflight_wifi_service", "Departure_Arrival_time_convenient",
+  "Ease_of_Online_booking", "Gate_location", "Food_and_drink",
+  "Online_boarding", "Seat_comfort", "Inflight_entertainment",
+  "On_board_service", "Leg_room_service", "Baggage_handling",
+  "Checkin_service", "Cleanliness",
+  "Departure_Delay_in_Minutes", "Arrival_Delay_in_Minutes",
+  "Satisfaction"
+)
+
+names(data)
+```
+
+```{r}
+unique(data$Customer_Type)
+unique(data$Type_of_Travel)
+unique(data$Class)
+unique(data$Gender)
+unique(data$Satisfaction)
+```
+
+Na osnovu izlaza uočili smo nekonzistentnosti u kolonama `Customer_Type` i `Type_of_Travel`:
+
+- U koloni `Customer_Type` postoje vrednosti `"Loyal Customer"` i `"disloyal Customer"` — druga vrednost počinje malim slovom "d".
+- U koloni `Type_of_Travel` postoje vrednosti `"Personal Travel"` i `"Business travel"` — u drugoj vrednosti reč "travel" je napisana malim slovom "t".
+
+```{r}
+# Ujednačavamo zapis u koloni Customer_Type
+data$Customer_Type <- recode(data$Customer_Type,
+  "Loyal Customer" = "Loyal Customer",
+  "disloyal Customer" = "Disloyal Customer"
+)
+
+# Ujednačavamo zapis u koloni Type_of_Travel
+data$Type_of_Travel <- recode(data$Type_of_Travel,
+  "Personal Travel" = "Personal Travel",
+  "Business travel" = "Business Travel"
+)
+
+```
+
+## Konverzija ciljne promenljive u faktor
+
+Ciljna promenljiva `Satisfaction` trenutno je tekstualnog tipa (`chr`). Za potrebe modelovanja klasifikacije, potrebno je da ova promenljiva bude **faktor** – R će je tada tretirati kao kategorijsku promenljivu sa dve klase. Ovim ćemo joj dodeliti i jasne labele.
+
+```{r}
+data$Satisfaction <- factor(data$Satisfaction,
+  levels = c("True", "False"),
+  labels = c("Satisfied", "Not Satisfied")
+)
+
+```
+
+## Konverzija ostalih kategorijskih promenljiva u faktor
+
+Pored ciljne promenljive, i ostale kategorijske promenljive (`Gender`, `Customer_Type`, `Type_of_Travel`, `Class`) treba konvertovati u faktore. Faktori su u R-u namenjeni za kategorijske promenljive i omogućavaju modelima mašinskog učenja da ih pravilno interpretiraju.
+
+
+```{r}
+data$Gender <- as.factor(data$Gender)
+data$Customer_Type <- as.factor(data$Customer_Type)
+data$Type_of_Travel <- as.factor(data$Type_of_Travel)
+data$Class <- as.factor(data$Class)
+
+str(data)
+```
+## Deskriptivna statistika
+
+Nakon svih pripremnih koraka, funkcijom `summary()` dobijamo osnovne deskriptivne statistike za svaku promenljivu.
+
+```{r}
+summary(data)
+```
+
+## Zaključak pregleda podataka
+
+Kroz pregled podataka ustanovili smo:
+
+- Skup sadrži **129.880 opservacija** i **22 promenljive**.
+- **Ciljna promenljiva `Satisfaction`** je binarna, sa blagom neuravnoteženošću: 43.4% Satisfied i 56.6% Not Satisfied.
+- **`Arrival_Delay_in_Minutes`** sadrži 393 nedostajuće vrednosti, što ćemo rešiti u sekciji Priprema podataka.
+- Sve kategorijske promenljive su konvertovane u faktore.
+- Ocene usluga su ordinalne promenljive (0–5), gde 0 označava da usluga nije ocenjena.
+
+U narednoj sekciji prelazimo na **eksplorativnu analizu podataka (EDA)**, gde ćemo detaljnije ispitati distribucije i odnose među promenljivama.
+
+
+#Eksplorativna analiza podataka(EDA)
+
+
+
 
 
