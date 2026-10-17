@@ -53,17 +53,22 @@ Ciljna promenljiva je **Satisfaction**, koja ima dve vrednosti: *Satisfied* i *N
 data=read.csv("../data/data.csv",stringsAsFactors = FALSE) #korišćenjem argumenta stringAsFactors i postavljanjem njegove vrednosti na FALSE omogućava nam da sve string promenljive inicijalno ne transformiše u faktore proizvoljno, nego da ih ostavlja u string obliku, što ide u prilog tome da mi možemo sami faktorisati promenljive u zavisnosti od potrebe u kodu.  
 ```
 
+
 Ispis prvih nekoliko redova skupa podataka:
+
 ```{r}
 head(data)
 ``` 
+
 Nakon učitavanja podataka, funcijom str proveravamo strukturu podataka.
 Ovo nam pomaže da unapred uočimo koje su promenljive numeričke, a koje kategorijske, kao i da li postoje promenljive koje treba dodatno obraditi (npr. konverzija tipa ili faktorizacija).
+
 
 ## Struktura podataka
 ```{r}
 str(data)
 ```
+
 Iz izlaza možemo da zaključimo:
 
 - Skup sadrži **129.880 redova** i **22 promenljive**.
@@ -132,7 +137,9 @@ Spisak kolona koje skup sadrži i kratak opis:
 names(data)
 ```
 
+
 Da bismo olakšali dalji rad i učinili kod čitljivijim, preimenovaćemo kolone u konzistentan format sa donjim crtama (`_`) umesto tačaka. Takođe, vodimo računa da svaki naziv počinje velikim slovom, radi konzistentnosti.
+
 
 ```{r}
 names(data) <- c(
@@ -149,6 +156,7 @@ names(data) <- c(
 
 names(data)
 ```
+
 ```{r}
 unique(data$Customer_Type)
 unique(data$Type_of_Travel)
@@ -176,6 +184,7 @@ data$Type_of_Travel <- recode(data$Type_of_Travel,
 )
 
 ```
+
 ## Konverzija ciljne promenljive u faktor
 
 Ciljna promenljiva `Satisfaction` trenutno je tekstualnog tipa (`chr`). Za potrebe modelovanja klasifikacije, potrebno je da ova promenljiva bude **faktor** – R će je tada tretirati kao kategorijsku promenljivu sa dve klase. Ovim ćemo joj dodeliti i jasne labele.
@@ -188,13 +197,43 @@ data$Satisfaction <- factor(data$Satisfaction,
 
 ```
 
+## Konverzija ostalih kategorijskih promenljiva u faktor
+
+Pored ciljne promenljive, i ostale kategorijske promenljive (`Gender`, `Customer_Type`, `Type_of_Travel`, `Class`) treba konvertovati u faktore. Faktori su u R-u namenjeni za kategorijske promenljive i omogućavaju modelima mašinskog učenja da ih pravilno interpretiraju.
+
+
+```{r}
+data$Gender <- as.factor(data$Gender)
+data$Customer_Type <- as.factor(data$Customer_Type)
+data$Type_of_Travel <- as.factor(data$Type_of_Travel)
+data$Class <- as.factor(data$Class)
+
+str(data)
+```
+## Deskriptivna statistika
+
+Nakon svih pripremnih koraka, funkcijom `summary()` dobijamo osnovne deskriptivne statistike za svaku promenljivu.
+
 ```{r}
 summary(data)
 ```
-- **Ciljna promenljiva `Satisfaction`** ima dve klase:
-  - `Satisfied`: 56.428 putnika (43.4%)
-  - `Not Satisfied`: 73.452 putnika (56.6%)
-  - Klase su **relativno balansirane**, što je povoljno za modele klasifikacije.
-  
-Takodje, vidimo da promenljiva **Arrival_Delay_in_Minutes** ima 393 nedostajućih vrednosti.
+
+## Zaključak pregleda podataka
+
+Kroz pregled podataka ustanovili smo:
+
+- Skup sadrži **129.880 opservacija** i **22 promenljive**.
+- **Ciljna promenljiva `Satisfaction`** je binarna, sa blagom neuravnoteženošću: 43.4% Satisfied i 56.6% Not Satisfied.
+- **`Arrival_Delay_in_Minutes`** sadrži 393 nedostajuće vrednosti, što ćemo rešiti u sekciji Priprema podataka.
+- Sve kategorijske promenljive su konvertovane u faktore.
+- Ocene usluga su ordinalne promenljive (0–5), gde 0 označava da usluga nije ocenjena.
+
+U narednoj sekciji prelazimo na **eksplorativnu analizu podataka (EDA)**, gde ćemo detaljnije ispitati distribucije i odnose među promenljivama.
+
+
+#Eksplorativna analiza podataka(EDA)
+
+
+
+
 
