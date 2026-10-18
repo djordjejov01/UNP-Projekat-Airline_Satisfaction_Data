@@ -83,7 +83,7 @@ Na osnovu tipova promenljivih, možemo ih podeliti u dve osnovne grupe:
 - `Gender`, `Customer.Type`, `Type.of.Travel`, `Class`, `satisfaction`
 
 **Numeričke promenljive (17):**
-- `Age`, `Flight.Distance`, sve ocene usluga (14 kolona), `Departure.Delay.in.Minutes`, `Arrival.Delay.in.Minutes`
+- `Age`, `Flight.Distance`, sve ocene usluga (13 kolona), `Departure.Delay.in.Minutes`, `Arrival.Delay.in.Minutes`
 
 ## Opis kolona
 
@@ -258,7 +258,7 @@ Kao što primećujemo ne postoje potpuni duplikati. Sledeće proveravamo nedosta
 lapply(data %>% select(where(is.factor)), levels)
 ```
 
-Na osnovu izlaza možemo da zaključimo da su podaci u potpunosti čisti:
+Na osnovu izlaza možemo da zaključimo da su podaci čisti:
 - `Gender` sadrži samo `Female` i `Male`.
 - `Customer_Type` sadrži samo `Disloyal Customer` i `Loyal Customer`.
 - `Type_of_Travel` sadrži samo `Business Travel` i `Personal Travel`.
@@ -309,11 +309,13 @@ data %>%
     )
   )
 ```
-Na osnovu dobijenih rezultata uočavamo da se broj nultih vrednosti značajno razlikuje u zavisnosti od usluge:
+Na osnovu dobijenih rezultata uočavamo da se broj nultih vrednosti razlikuje u zavisnosti od posmatrane usluge:
 
-- **Najviše nula** imaju usluge koje su specifične ili nisu dostupne na svakom letu: `Departure_Arrival_time_convenient` (6.681), `Ease_of_Online_booking` (5.682), `Inflight_wifi_service` (3.916) i `Online_boarding` (3.080). Ovo ima smisla iz domenskog znanja — na primer, putnici koji su kartu kupili preko agencije nisu koristili uslugu online rezervacije, ili na kraćim letovima nije bilo WiFi-ja.
-- **Umeren broj nula** imaju usluge poput `Leg_room_service` (598) i `Food_and_drink` (132).
-- **Gotovo da nema nula** kod usluga koje su univerzalne za svaki let: `Baggage_handling` (0), `Gate_location` (1), `Seat_comfort` (1), `Checkin_service` (1) i `On_board_service` (5). Logično je da je svaki putnik morao da prođe kroz gejt, preda prtljag i sedi u sedištu, pa su te usluge skoro uvek ocenjene.
+- **Najviše nultih vrednosti** imaju `Departure_Arrival_time_convenient` (6.681), `Ease_of_Online_booking` (5.682), `Inflight_wifi_service` (3.916) i `Online_boarding` (3.080). Ove promenljive odnose se na usluge koje možda nisu bile dostupne, relevantne ili korišćene za sve putnike. Na primer, moguće je da pojedini putnici nisu koristili online rezervaciju ili online ukrcavanje, odnosno da WiFi usluga nije bila dostupna ili korišćena na određenim letovima. Međutim, na osnovu dostupnih podataka ne možemo sa sigurnošću utvrditi konkretan razlog za pojavu svake nulte vrednosti.
+
+- **Umeren broj nultih vrednosti** imaju `Leg_room_service` (598) i `Food_and_drink` (132). I u ovom slučaju nulta vrednost može označavati da usluga nije bila korišćena, dostupna ili relevantna za određenog putnika, pa je treba razlikovati od ocene nezadovoljstva.
+
+- **Gotovo da nema nultih vrednosti** kod promenljivih `Baggage_handling` (0), `Gate_location` (1), `Seat_comfort` (1), `Checkin_service` (1) i `On_board_service` (5). To može ukazivati na to da su ove usluge bile dostupne ili relevantne za većinu putnika u posmatranom skupu. Ipak, bez dodatnih informacija o načinu prikupljanja i kodiranja podataka ne možemo sa potpunom sigurnošću zaključiti zbog čega se kod pojedinih opservacija pojavljuje vrednost 0.
 
 ## Univarijantna analiza
 

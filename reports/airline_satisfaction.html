@@ -498,7 +498,7 @@ grupe:</p>
 <code>Customer.Type</code>, <code>Type.of.Travel</code>,
 <code>Class</code>, <code>satisfaction</code></p>
 <p><strong>Numeričke promenljive (17):</strong> - <code>Age</code>,
-<code>Flight.Distance</code>, sve ocene usluga (14 kolona),
+<code>Flight.Distance</code>, sve ocene usluga (13 kolona),
 <code>Departure.Delay.in.Minutes</code>,
 <code>Arrival.Delay.in.Minutes</code></p>
 </div>
@@ -812,15 +812,14 @@ lapply(data %&gt;% select(where(is.factor)), levels)</code></pre>
 ## 
 ## $Satisfaction
 ## [1] &quot;Satisfied&quot;     &quot;Not Satisfied&quot;</code></pre>
-<p>Na osnovu izlaza možemo da zaključimo da su podaci u potpunosti
-čisti: - <code>Gender</code> sadrži samo <code>Female</code> i
-<code>Male</code>. - <code>Customer_Type</code> sadrži samo
-<code>Disloyal Customer</code> i <code>Loyal Customer</code>. -
-<code>Type_of_Travel</code> sadrži samo <code>Business Travel</code> i
-<code>Personal Travel</code>. - <code>Class</code> sadrži samo
-<code>Business</code>, <code>Eco</code> i <code>Eco Plus</code>. -
-<code>Satisfaction</code> sadrži samo <code>Satisfied</code> i
-<code>Not Satisfied</code>.</p>
+<p>Na osnovu izlaza možemo da zaključimo da su podaci čisti: -
+<code>Gender</code> sadrži samo <code>Female</code> i <code>Male</code>.
+- <code>Customer_Type</code> sadrži samo <code>Disloyal Customer</code>
+i <code>Loyal Customer</code>. - <code>Type_of_Travel</code> sadrži samo
+<code>Business Travel</code> i <code>Personal Travel</code>. -
+<code>Class</code> sadrži samo <code>Business</code>, <code>Eco</code> i
+<code>Eco Plus</code>. - <code>Satisfaction</code> sadrži samo
+<code>Satisfied</code> i <code>Not Satisfied</code>.</p>
 <p><strong>Nijedna kategorijska promenljiva ne sadrži prazne stringove
 niti tekstualne oznake za nedostajuće vrednosti.</strong></p>
 <p>Proveravamo mogućnost postojanja nelogičnih vrednosti.</p>
@@ -880,26 +879,32 @@ data %&gt;%
 ##   Baggage_handling Checkin_service Cleanliness
 ## 1                0               1          14</code></pre>
 <p>Na osnovu dobijenih rezultata uočavamo da se broj nultih vrednosti
-značajno razlikuje u zavisnosti od usluge:</p>
+razlikuje u zavisnosti od posmatrane usluge:</p>
 <ul>
-<li><strong>Najviše nula</strong> imaju usluge koje su specifične ili
-nisu dostupne na svakom letu:
+<li><p><strong>Najviše nultih vrednosti</strong> imaju
 <code>Departure_Arrival_time_convenient</code> (6.681),
 <code>Ease_of_Online_booking</code> (5.682),
 <code>Inflight_wifi_service</code> (3.916) i
-<code>Online_boarding</code> (3.080). Ovo ima smisla iz domenskog znanja
-— na primer, putnici koji su kartu kupili preko agencije nisu koristili
-uslugu online rezervacije, ili na kraćim letovima nije bilo
-WiFi-ja.</li>
-<li><strong>Umeren broj nula</strong> imaju usluge poput
-<code>Leg_room_service</code> (598) i <code>Food_and_drink</code>
-(132).</li>
-<li><strong>Gotovo da nema nula</strong> kod usluga koje su univerzalne
-za svaki let: <code>Baggage_handling</code> (0),
-<code>Gate_location</code> (1), <code>Seat_comfort</code> (1),
-<code>Checkin_service</code> (1) i <code>On_board_service</code> (5).
-Logično je da je svaki putnik morao da prođe kroz gejt, preda prtljag i
-sedi u sedištu, pa su te usluge skoro uvek ocenjene.</li>
+<code>Online_boarding</code> (3.080). Ove promenljive odnose se na
+usluge koje možda nisu bile dostupne, relevantne ili korišćene za sve
+putnike. Na primer, moguće je da pojedini putnici nisu koristili online
+rezervaciju ili online ukrcavanje, odnosno da WiFi usluga nije bila
+dostupna ili korišćena na određenim letovima. Međutim, na osnovu
+dostupnih podataka ne možemo sa sigurnošću utvrditi konkretan razlog za
+pojavu svake nulte vrednosti.</p></li>
+<li><p><strong>Umeren broj nultih vrednosti</strong> imaju
+<code>Leg_room_service</code> (598) i <code>Food_and_drink</code> (132).
+I u ovom slučaju nulta vrednost može označavati da usluga nije bila
+korišćena, dostupna ili relevantna za određenog putnika, pa je treba
+razlikovati od ocene nezadovoljstva.</p></li>
+<li><p><strong>Gotovo da nema nultih vrednosti</strong> kod promenljivih
+<code>Baggage_handling</code> (0), <code>Gate_location</code> (1),
+<code>Seat_comfort</code> (1), <code>Checkin_service</code> (1) i
+<code>On_board_service</code> (5). To može ukazivati na to da su ove
+usluge bile dostupne ili relevantne za većinu putnika u posmatranom
+skupu. Ipak, bez dodatnih informacija o načinu prikupljanja i kodiranja
+podataka ne možemo sa potpunom sigurnošću zaključiti zbog čega se kod
+pojedinih opservacija pojavljuje vrednost 0.</p></li>
 </ul>
 </div>
 <div id="univarijantna-analiza" class="section level2">
