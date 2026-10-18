@@ -3,6 +3,8 @@ title: "Airline satisfaction data"
 output:
   html_document: default
   pdf_document: default
+  word_document: 
+    reference_docx: template.docx
 ---
 
 ```{r setup, include=FALSE}
@@ -229,7 +231,7 @@ Kroz pregled podataka ustanovili smo:
 U narednoj sekciji prelazimo na **eksplorativnu analizu podataka (EDA)**, gde ćemo detaljnije ispitati distribucije i odnose među promenljivama.
 
 
-#Eksplorativna analiza podataka(EDA)
+# Eksplorativna analiza podataka(EDA)
 
 
 Eksplorativna analiza podataka (Exploratory Data Analysis - EDA) predstavlja ključni korak u analizi u okviru koga istražujemo i vizualizujemo podatke, kako bismo saznali njihovu strukturu, uočili šablone, anomalije i proverili međusobne veze između promenljivih pre nego što pređemo na kreiranje modela mašinskog učenja.
