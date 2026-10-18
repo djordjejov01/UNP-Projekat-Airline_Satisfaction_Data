@@ -671,7 +671,7 @@ str(data)</code></pre>
 ##  $ Arrival_Delay_in_Minutes         : num  18 6 0 9 0 0 23 0 0 0 ...
 ##  $ Satisfaction                     : Factor w/ 2 levels &quot;Satisfied&quot;,&quot;Not Satisfied&quot;: 2 2 1 2 1 2 2 1 2 2 ...</code></pre>
 </div>
-<div id="deskriptivna-statistika" class="section level2">
+<div id="summary" class="section level2">
 <h2>Deskriptivna statistika</h2>
 <p>Nakon svih pripremnih koraka, funkcijom <code>summary()</code>
 dobijamo osnovne deskriptivne statistike za svaku promenljivu.</p>
@@ -753,13 +753,155 @@ podataka (EDA)</strong>, gde ćemo detaljnije ispitati distribucije i
 odnose među promenljivama.</p>
 </div>
 </div>
-<div id="eksplorativna-analiza-podatakaeda" class="section level1">
-<h1>Eksplorativna analiza podataka(EDA)</h1>
-<p>Eksplorativna analiza podataka (Exploratory Data Analysis - EDA)
-predstavlja ključni korak u analizi u okviru koga istražujemo i
-vizualizujemo podatke, kako bismo saznali njihovu strukturu, uočili
-šablone, anomalije i proverili međusobne veze između promenljivih pre
-nego što pređemo na kreiranje modela mašinskog učenja.</p>
+<div id="eksplorativna-analiza-podataka-eda" class="section level1">
+<h1>Eksplorativna analiza podataka (EDA)</h1>
+<p>Eksplorativna analiza podataka (Exploratory Data Analysis – EDA)
+predstavlja važan korak u procesu analize, jer omogućava bolje
+razumevanje strukture, kvaliteta i osnovnih karakteristika podataka pre
+izgradnje prediktivnih modela.</p>
+<p>U okviru ove analize ispitaćemo distribucije pojedinačnih
+promenljivih, učestalost kategorija, raspodelu ciljne promenljive
+Satisfaction, kao i odnose između karakteristika putnika, kvaliteta
+usluga i konačnog zadovoljstva. Posebna pažnja biće posvećena numeričkim
+promenljivama, kao što su starost putnika, dužina leta i vremena
+kašnjenja, ali i ocenama različitih usluga, koje imaju vrednosti od 0 do
+5. Kategorijske promenljive, poput klase putovanja, tipa putovanja i
+tipa korisnika, biće analizirane kroz njihove frekvencije i u odnosu na
+zadovoljstvo putnika.</p>
+<p>EDA će obuhvatiti <strong>univarijantnu analizu</strong>, kojom se
+svaka promenljiva posmatra pojedinačno, kao i <strong>bivarijantnu
+analizu</strong>, kojom se ispituje povezanost između pojedinačnih
+karakteristika i ciljne promenljive <strong>Satisfaction</strong>. Na
+ovaj način mogu se uočiti najvažniji obrasci, razlike između zadovoljnih
+i nezadovoljnih putnika, eventualna neuravnoteženost klasa, nedostajuće
+vrednosti i moguće anomalije u podacima.</p>
+<p>Rezultati eksplorativne analize poslužiće kao osnova za donošenje
+odluka u procesu pripreme podataka i izbora promenljivih za modele
+mašinskog učenja. Takođe, EDA može ukazati na karakteristike koje imaju
+najveći potencijal za predviđanje zadovoljstva putnika.</p>
+<div id="provera-kvaliteta-podataka-pre-analize" class="section level2">
+<h2>Provera kvaliteta podataka pre analize</h2>
+<p>Pre nego što pređemo na detaljnu vizualizaciju i analizu
+distribucija, neophodno je proveriti osnovni kvalitet podataka. U ovom
+koraku nećemo vršiti ispravke, već ćemo samo identifikovati potencijalne
+probleme (nedostajuće vrednosti, duplikate, prazne stringove) koje ćemo
+rešiti u kasnijoj fazi pripreme podataka.</p>
+<p>Prva provera koju ćemo napraviti je provera duplikata.</p>
+<pre class="r"><code>sum(duplicated(data))</code></pre>
+<pre><code>## [1] 0</code></pre>
+<p>Kao što primećujemo ne postoje potpuni duplikati. Sledeće proveravamo
+nedostajuće vrednosti. Kao što smo već videli u delu <a href="#summary">deskriptivne statistike</a>, kolona
+<strong>Arrival_Delay_in_Minutes</strong> sadrži 393 nedostajuće
+vrednosti, međutim, ponekad se u <code>.csv</code> fajlovima nedostajuće
+vrednosti pojavljuju kao tekst (npr. <code>&quot;NA&quot;</code>,
+<code>&quot;N/A&quot;</code>, <code>&quot;Unknown&quot;</code>). Proverićemo da li se takve
+vrednosti kriju u našim kategorijskim promenljivama.</p>
+<pre class="r"><code># Prikazujemo sve jedinstvene nivoe za svaku kategorijsku promenljivu
+lapply(data %&gt;% select(where(is.factor)), levels)</code></pre>
+<pre><code>## $Gender
+## [1] &quot;Female&quot; &quot;Male&quot;  
+## 
+## $Customer_Type
+## [1] &quot;Disloyal Customer&quot; &quot;Loyal Customer&quot;   
+## 
+## $Type_of_Travel
+## [1] &quot;Business Travel&quot; &quot;Personal Travel&quot;
+## 
+## $Class
+## [1] &quot;Business&quot; &quot;Eco&quot;      &quot;Eco Plus&quot;
+## 
+## $Satisfaction
+## [1] &quot;Satisfied&quot;     &quot;Not Satisfied&quot;</code></pre>
+<p>Na osnovu izlaza možemo da zaključimo da su podaci u potpunosti
+čisti: - <code>Gender</code> sadrži samo <code>Female</code> i
+<code>Male</code>. - <code>Customer_Type</code> sadrži samo
+<code>Disloyal Customer</code> i <code>Loyal Customer</code>. -
+<code>Type_of_Travel</code> sadrži samo <code>Business Travel</code> i
+<code>Personal Travel</code>. - <code>Class</code> sadrži samo
+<code>Business</code>, <code>Eco</code> i <code>Eco Plus</code>. -
+<code>Satisfaction</code> sadrži samo <code>Satisfied</code> i
+<code>Not Satisfied</code>.</p>
+<p><strong>Nijedna kategorijska promenljiva ne sadrži prazne stringove
+niti tekstualne oznake za nedostajuće vrednosti.</strong></p>
+<p>Proveravamo mogućnost postojanja nelogičnih vrednosti.</p>
+<pre class="r"><code>sum(data$Age &lt; 0 | data$Age &gt; 100, na.rm = TRUE)</code></pre>
+<pre><code>## [1] 0</code></pre>
+<pre class="r"><code>sum(data$Flight_Distance &lt; 0, na.rm = TRUE)</code></pre>
+<pre><code>## [1] 0</code></pre>
+<pre class="r"><code>sum(data$Departure_Delay_in_Minutes &lt; 0, na.rm = TRUE)</code></pre>
+<pre><code>## [1] 0</code></pre>
+<pre class="r"><code>sum(data$Arrival_Delay_in_Minutes &lt; 0, na.rm = TRUE)</code></pre>
+<pre><code>## [1] 0</code></pre>
+<p>Proverom numeričkih promenljivih Age, Flight_Distance,
+Departure_Delay_in_Minutes i Arrival_Delay_in_Minutes nisu pronađene
+vrednosti koje odstupaju od postavljenih logičkih ograničenja. Nije
+pronađena nijedna vrednost starosti manja od 0 ili veća od 100 godina,
+kao ni negativna vrednost pređene udaljenosti ili kašnjenja pri polasku
+i dolasku.</p>
+<p>Na osnovu ovih provera, u navedenim promenljivama nisu uočene
+anomalije ovog tipa. Ipak, ovo ne isključuje mogućnost postojanja drugih
+anomalija ili neuobičajenih vrednosti koje zahtevaju dodatnu
+analizu.</p>
+<p>Pre nego što pređemo na dalju analizu, potrebno je da se osvrnemo na
+ocene usluga (kolone poput <code>Inflight_wifi_service</code>,
+<code>Food_and_drink</code>, itd.). Prema zvaničnoj dokumentaciji skupa
+podataka, ocene se kreću u opsegu od 1 do 5, pri čemu <strong>vrednost 0
+označava da usluga nije ocenjena</strong> (npr. putnik nije koristio
+WiFi, nije konzumirao hranu, ili let nije imao tu uslugu).</p>
+<pre class="r"><code>rating_columns &lt;- c(
+  &quot;Inflight_wifi_service&quot;,
+  &quot;Departure_Arrival_time_convenient&quot;,
+  &quot;Ease_of_Online_booking&quot;,
+  &quot;Gate_location&quot;,
+  &quot;Food_and_drink&quot;,
+  &quot;Online_boarding&quot;,
+  &quot;Seat_comfort&quot;,
+  &quot;Inflight_entertainment&quot;,
+  &quot;On_board_service&quot;,
+  &quot;Leg_room_service&quot;,
+  &quot;Baggage_handling&quot;,
+  &quot;Checkin_service&quot;,
+  &quot;Cleanliness&quot;
+)
+
+data %&gt;%
+  summarise(
+    across(
+      all_of(rating_columns),
+      ~ sum(. == 0, na.rm = TRUE)
+    )
+  )</code></pre>
+<pre><code>##   Inflight_wifi_service Departure_Arrival_time_convenient
+## 1                  3916                              6681
+##   Ease_of_Online_booking Gate_location Food_and_drink Online_boarding
+## 1                   5682             1            132            3080
+##   Seat_comfort Inflight_entertainment On_board_service Leg_room_service
+## 1            1                     18                5              598
+##   Baggage_handling Checkin_service Cleanliness
+## 1                0               1          14</code></pre>
+<p>Na osnovu dobijenih rezultata uočavamo da se broj nultih vrednosti
+značajno razlikuje u zavisnosti od usluge:</p>
+<ul>
+<li><strong>Najviše nula</strong> imaju usluge koje su specifične ili
+nisu dostupne na svakom letu:
+<code>Departure_Arrival_time_convenient</code> (6.681),
+<code>Ease_of_Online_booking</code> (5.682),
+<code>Inflight_wifi_service</code> (3.916) i
+<code>Online_boarding</code> (3.080). Ovo ima smisla iz domenskog znanja
+— na primer, putnici koji su kartu kupili preko agencije nisu koristili
+uslugu online rezervacije, ili na kraćim letovima nije bilo
+WiFi-ja.</li>
+<li><strong>Umeren broj nula</strong> imaju usluge poput
+<code>Leg_room_service</code> (598) i <code>Food_and_drink</code>
+(132).</li>
+<li><strong>Gotovo da nema nula</strong> kod usluga koje su univerzalne
+za svaki let: <code>Baggage_handling</code> (0),
+<code>Gate_location</code> (1), <code>Seat_comfort</code> (1),
+<code>Checkin_service</code> (1) i <code>On_board_service</code> (5).
+Logično je da je svaki putnik morao da prođe kroz gejt, preda prtljag i
+sedi u sedištu, pa su te usluge skoro uvek ocenjene.</li>
+</ul>
+</div>
 <div id="univarijantna-analiza" class="section level2">
 <h2>Univarijantna analiza</h2>
 <p>U okviru univarijantne analize posmatraćemo svaku promenljivu
