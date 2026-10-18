@@ -1,10 +1,10 @@
 ---
 title: "Airline satisfaction data"
 output:
+  html_document: default
+  pdf_document: default
   word_document: 
     reference_docx: template.docx
-  pdf_document: default
-  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -352,5 +352,60 @@ ggplot(data, aes(x = Satisfaction, fill = Satisfaction)) +
 
 Nakon vizuelne i numeričke analize ciljne promenljive, uočavamo da su nezadovoljni putnici (*Not Satisfied*) blago zastupljeniji sa **56.6%**, dok zadovoljni (*Satisfied*) čine **43.4%** uzorka. Ova raspodela ukazuje na to da podaci nemaju drastičan disbalans klasa, što predstavlja povoljnu osnovu za kasniju izgradnju i treniranje modela klasifikacije, jer nijedna klasa nije zanemarljivo mala.
 
+### Analiza kategorijskih promenljivih (Gender, Customer_Type, Type_of_Travel, Class)
 
+Pored ciljne promenljive, analiziraćemo i preostale kategorijske promenljive kako bismo utvrdili strukturu putnika u našem uzorku. Prvo ćemo prikazati frekvencije i procente za svaku od ovih karakteristika.
 
+```{r}
+# Prikaz distribucije za ključne kategorijske promenljive
+data %>% count(Gender, name = "Broj") %>% mutate(Procenat = round(Broj / sum(Broj) * 100, 2))
+data %>% count(Customer_Type, name = "Broj") %>% mutate(Procenat = round(Broj / sum(Broj) * 100, 2))
+data %>% count(Type_of_Travel, name = "Broj") %>% mutate(Procenat = round(Broj / sum(Broj) * 100, 2))
+data %>% count(Class, name = "Broj") %>% mutate(Procenat = round(Broj / sum(Broj) * 100, 2))
+```
+
+### Da bismo ove odnose lakše sagledali vizuelno, priazaćemo ih stubićastim dijagramima za svaku kategorijsku promenljivu.
+
+```{r}
+# Vizuelizacija kategorijskih promenljivih sa lepšim nazivima i labelama
+p1 <- ggplot(data, aes(x = Gender, fill = Gender)) + 
+  geom_bar(width = 0.6) + 
+  theme_minimal() + 
+  labs(title = "Distribucija putnika po polu", x = "Polni sastav", y = "Broj putnika") + 
+  theme(legend.position = "none")
+
+p2 <- ggplot(data, aes(x = Customer_Type, fill = Customer_Type)) + 
+  geom_bar(width = 0.6) + 
+  theme_minimal() + 
+  labs(title = "Odnos lojalnih i dislojalnih korisnika", x = "Tip korisnika", y = "Broj putnika") + 
+  theme(legend.position = "none")
+
+p3 <- ggplot(data, aes(x = Type_of_Travel, fill = Type_of_Travel)) + 
+  geom_bar(width = 0.6) + 
+  theme_minimal() + 
+  labs(title = "Struktura prema svrsi putovanja", x = "Svrha putovanja", y = "Broj putnika") + 
+  theme(legend.position = "none")
+
+p4 <- ggplot(data, aes(x = Class, fill = Class)) + 
+  geom_bar(width = 0.6) + 
+  theme_minimal() + 
+  labs(title = "Zastupljenost klasa leta", x = "Klasa avio-karte", y = "Broj putnika") + 
+  theme(legend.position = "none")
+```
+Prikaz pojedinačnih grafika
+```{r}
+p1 
+```
+Zastupljenost putnika muškog i ženskog pola je izuzetno ujednačena, što ukazuje na to da pol sam po sebi verovatno neće imati drastičnu prevagu u strukturi zadovoljstva.
+```{r} 
+p2
+```
+Uočava se dominacija lojalnih putnika (Loyal Customer), dok redovnih/dislojalnih korisnika ima u znatno manjem broju. Ova kategorija može igrati važnu ulogu u oceni usluga.
+```{r}
+p3
+```
+Poslovna putovanja (Business Travel) znatno nadmašuju lična putovanja (Personal Travel), što sugeriše da aviokompanija najviše posluje sa poslovnim klijentima.
+```{r}
+p4
+```
+Biznis klasa i ekonomska klasa (Eco) čine apsolutnu većinu putnika, dok je Eco Plus zastupljena u znatno manjem obimu.
