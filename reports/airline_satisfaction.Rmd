@@ -373,39 +373,90 @@ p1 <- ggplot(data, aes(x = Gender, fill = Gender)) +
   theme_minimal() + 
   labs(title = "Distribucija putnika po polu", x = "Polni sastav", y = "Broj putnika") + 
   theme(legend.position = "none")
+p1
+```
+Zastupljenost putnika muškog i ženskog pola je izuzetno ujednačena, što ukazuje na to da pol sam po sebi verovatno neće imati drastičnu prevagu u strukturi zadovoljstva.
 
+```{r}
 p2 <- ggplot(data, aes(x = Customer_Type, fill = Customer_Type)) + 
   geom_bar(width = 0.6) + 
   theme_minimal() + 
   labs(title = "Odnos lojalnih i dislojalnih korisnika", x = "Tip korisnika", y = "Broj putnika") + 
   theme(legend.position = "none")
+p2
+```
+Uočava se dominacija lojalnih putnika (Loyal Customer), dok redovnih/dislojalnih korisnika ima u znatno manjem broju. Ova kategorija može igrati važnu ulogu u oceni usluga.
 
+```{r}
 p3 <- ggplot(data, aes(x = Type_of_Travel, fill = Type_of_Travel)) + 
   geom_bar(width = 0.6) + 
   theme_minimal() + 
   labs(title = "Struktura prema svrsi putovanja", x = "Svrha putovanja", y = "Broj putnika") + 
   theme(legend.position = "none")
+p3
+```
+Poslovna putovanja (Business Travel) znatno nadmašuju lična putovanja (Personal Travel), što sugeriše da aviokompanija najviše posluje sa poslovnim klijentima.
 
+```{r}
 p4 <- ggplot(data, aes(x = Class, fill = Class)) + 
   geom_bar(width = 0.6) + 
   theme_minimal() + 
   labs(title = "Zastupljenost klasa leta", x = "Klasa avio-karte", y = "Broj putnika") + 
   theme(legend.position = "none")
-```
-Prikaz pojedinačnih grafika
-```{r}
-p1 
-```
-Zastupljenost putnika muškog i ženskog pola je izuzetno ujednačena, što ukazuje na to da pol sam po sebi verovatno neće imati drastičnu prevagu u strukturi zadovoljstva.
-```{r} 
-p2
-```
-Uočava se dominacija lojalnih putnika (Loyal Customer), dok redovnih/dislojalnih korisnika ima u znatno manjem broju. Ova kategorija može igrati važnu ulogu u oceni usluga.
-```{r}
-p3
-```
-Poslovna putovanja (Business Travel) znatno nadmašuju lična putovanja (Personal Travel), što sugeriše da aviokompanija najviše posluje sa poslovnim klijentima.
-```{r}
 p4
 ```
 Biznis klasa i ekonomska klasa (Eco) čine apsolutnu većinu putnika, dok je Eco Plus zastupljena u znatno manjem obimu.
+
+### Analiza numeričkih promenljivih (Age, Flight_Distance, Departure_Delay_in_Minutes, Arrival_Delay_in_Minutes)
+
+Nakon analize kategorijskih promenljivih, prelazimo na istraživanje kontinuiranih (numeričkih) promenljivih. Cilj ove analize je sagledavanje centralnih tendencija, raspršenja, kao i uočavanje potencijalnih ekstremnih vrednosti (outlier-a) ili zakrivljenosti u distribucijama.
+
+Prvo ćemo izračunati osnovne statističke pokazatelje za posmatrane numeričke promenljive.
+
+```{r}
+# Deskriptivna statistika za numeričke promenljive
+data %>% 
+  select(Age, Flight_Distance, Departure_Delay_in_Minutes, Arrival_Delay_in_Minutes) %>% 
+  summary()
+```
+
+Da bismo ove distribucije i njihove specifičnosti sagledali vizuelno, prikazaćemo pojedinačne histograme sa gustinom ili boxplot grafike za svaku numeričku promenljivu.
+
+```{r}
+# Priprema grafika za numeričke promenljive
+p_age <- ggplot(data, aes(x = Age)) + 
+  geom_histogram(binwidth = 5, fill = "#3498db", color = "white", alpha = 0.8) + 
+  theme_minimal() + 
+  labs(title = "Distribucija starosti putnika", x = "Godine starosti (Age)", y = "Broj putnika")
+p_age
+```
+Starost putnika se kreće od 7 do 85 godina, pri čemu je najveća koncentracija putnika u starosnoj dobi između 20 i 60 godina (sa izraženim vrhuncem u rasponu od 40 do 50 godina). Distribucija uglavnom podseća na zvonastu raspodelu sa težištem u radno sposobnoj populaciji, što je u potpunosti u skladu sa prethodnim saznanjem da veći deo uzorka čine poslovni putnici.
+
+```{r}
+p_dist <- ggplot(data, aes(x = Flight_Distance)) + 
+  geom_histogram(binwidth = 200, fill = "#2ecc71", color = "white", alpha = 0.8) + 
+  theme_minimal() + 
+  labs(title = "Distribucija dužine leta", x = "Dužina leta u miljama (Flight Distance)", y = "Broj putnika")
+p_dist
+```
+Distribucija dužine leta pokazuje izraženu pozitivnu zakrivljenost (asimetriju udesno). Najveći broj letova obuhvata kraće i srednje relacije (sa najfrekventnijim opsegom između 300 i 1000 milja), dok je učestalost letova na dužim relacijama (preko 2000 milja) srazmerno manja.
+
+```{r}
+p_dep_delay <- ggplot(data, aes(x = Departure_Delay_in_Minutes)) + 
+  geom_histogram(binwidth = 15, fill = "#e67e22", color = "white", alpha = 0.8) + 
+  coord_cartesian(xlim = c(0, 200)) +
+  theme_minimal() + 
+  labs(title = "Distribucija kašnjenja u polasku", x = "Kašnjenje u polasku (minuti)", y = "Broj putnika")
+p_dep_delay
+```
+Promenljiva kašnjenja pri polasku ima izrazito asimetričnu raspodelu sa teškim desnim repom. Ogromna većina letova polazi bez ikakvog kašnjenja ili sa minimalnim odstupanjem (vrednosti oko 0), dok mali broj letova beleži duža kašnjenja, što ukazuje na prisustvo ekstremnih vrednosti (outlier-a).
+
+```{r}
+p_arr_delay <- ggplot(data, aes(x = Arrival_Delay_in_Minutes)) + 
+  geom_histogram(binwidth = 15, fill = "#e74c3c", color = "white", alpha = 0.8) + 
+  coord_cartesian(xlim = c(0, 200)) +
+  theme_minimal() + 
+  labs(title = "Distribucija kašnjenja u dolasku", x = "Kašnjenje u dolasku (minuti)", y = "Broj putnika")
+p_arr_delay
+```
+Distribucija kašnjenja u dolasku pokazuje gotovo identičan obrazac i strukturu kao kašnjenje u polasku. Većina putnika stiže na odredište bez kašnjenja, dok se manji broj opservacija sa dužim kašnjenjima pruža ka desnoj strani, što potvrđuje očekivanu visoku povezanost između ovih Mernih promenljivih.
