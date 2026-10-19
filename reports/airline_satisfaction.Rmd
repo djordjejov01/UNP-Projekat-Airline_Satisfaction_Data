@@ -1,10 +1,10 @@
 ---
 title: "Airline satisfaction data"
 output:
-  html_document: default
-  pdf_document: default
   word_document: 
     reference_docx: template.docx
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -544,6 +544,96 @@ Potencijalne ekstremne vrednosti nećemo automatski uklanjati, jer mogu predstav
 ## Bivarijantna analiza
 
 
+Bivarijantna analiza predstavlja deo eksplorativne analize u okviru koga se ispituje odnos između dve promenljive. Za razliku od univarijantne analize, u kojoj se svaka promenljiva posmatra pojedinačno, bivarijantna analiza omogućava da utvrdimo da li između promenljivih postoje određeni obrasci, razlike ili povezanosti.
+
+U ovom radu posebnu pažnju posvetićemo ispitivanju odnosa između karakteristika putnika i leta, sa jedne strane, i ciljne promenljive `Satisfaction`, sa druge strane. Cilj je da se utvrdi da li se zadovoljstvo putnika razlikuje u zavisnosti od pola, tipa korisnika, svrhe putovanja, klase leta, starosti, dužine leta, vremena kašnjenja i ocena pojedinačnih usluga.
+
+Kod kategorijskih promenljivih analiziraćemo raspodelu zadovoljnih i nezadovoljnih putnika unutar svake kategorije. Na primer, ispitaćemo da li se procenat zadovoljnih putnika razlikuje između poslovne i ekonomske klase, između lojalnih i dislojalnih korisnika, kao i između poslovnih i ličnih putovanja. Za ove prikaze koristićemo tabele frekvencija, procentualne stubičaste dijagrame i, po potrebi, test nezavisnosti.
+
+Kod numeričkih promenljivih poredićemo njihove distribucije između zadovoljnih i nezadovoljnih putnika. Na taj način možemo ispitati da li se, na primer, starost putnika, dužina leta ili vreme kašnjenja razlikuju između ove dve grupe. Za prikaz odnosa koristićemo boxplot grafikone, a kod promenljivih za koje je to opravdano i korelacionu analizu.
+
+Posebno ćemo analizirati odnos između ocena usluga i ciljne promenljive `Satisfaction`. Na osnovu tih analiza možemo utvrditi da li su više ocene usluga češće povezane sa zadovoljnim putnicima i koje karakteristike potencijalno imaju najveći značaj za predviđanje zadovoljstva.
+
+Rezultate bivarijantne analize nećemo tumačiti kao dokaz uzročno-posledične veze. Uočene razlike i povezanosti opisuju obrasce u posmatranom skupu podataka i poslužiće kao osnova za izbor promenljivih i izgradnju modela mašinskog učenja.
+
+
+### Bivarijantna analiza kategorijskih promenljivih
+
+#### Odnos pola i zadovoljstva putnika
+
+U ovom delu ispitaćemo da li se zadovoljstvo putnika razlikuje u zavisnosti od pola. Za razliku od univarijantne analize, u kojoj smo posmatrali samo zastupljenost muškaraca i žena, sada ćemo analizirati raspodelu kategorija `Satisfied` i `Not Satisfied` unutar svake polne grupe.
+
+Za poređenje ćemo koristiti relativne frekvencije, odnosno procenat zadovoljnih i nezadovoljnih putnika unutar svake kategorije pola. Korišćenje procenata je važno zato što omogućava pravično poređenje grupa, čak i kada njihov ukupan broj nije potpuno jednak.
+
+```{r}
+gender_satisfaction <- data %>%
+  count(Gender, Satisfaction, name = "Broj") %>%
+  group_by(Gender) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+gender_satisfaction
+```
+
+
+Da bismo lakše uporedili zadovoljstvo putnika između polnih grupa, prikazaćemo proporcionalni stubičasti dijagram. Visina svakog stuba predstavlja 100% putnika unutar jedne polne grupe, dok boje prikazuju udeo zadovoljnih i nezadovoljnih putnika.
+
+```{r}
+ggplot(data, aes(x = Gender, fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(
+    labels = scales::percent_format()
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema polu",
+    x = "Pol",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+Na osnovu tabele i proporcionalnog stubičastog dijagrama uočavamo da su raspodele zadovoljstva kod muškaraca i žena veoma slične. U grupi žena 42,9% putnika je zadovoljno, dok je 57,1% nezadovoljno. Kod muškaraca zadovoljni putnici čine 44,0%, a nezadovoljni 56,0%.
+
+Razlika u procentu zadovoljnih putnika između muškaraca i žena iznosi približno 1,1 procentni poen, što predstavlja malu razliku. Na osnovu ovog prikaza ne uočava se značajna razlika u zadovoljstvu putnika između dve polne grupe. Ipak, grafički prikaz sam po sebi ne predstavlja formalni statistički test, pa bi se značajnost eventualne povezanosti mogla dodatno proveriti hi-kvadrat testom.
+
+
+Da bismo formalno proverili da li postoji povezanost između pola i zadovoljstva putnika, primenjen je hi-kvadrat test nezavisnosti. Nultom hipotezom pretpostavlja se da pol i zadovoljstvo putnika nisu povezani, dok alternativna hipoteza pretpostavlja da između njih postoji povezanost.
+
+```{r}
+gender_satisfaction_table <- table(data$Gender, data$Satisfaction)
+
+gender_satisfaction_table
+
+gender_chisq <- chisq.test(gender_satisfaction_table)
+
+gender_chisq
+```
+
+Rezultat hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između pola i zadovoljstva putnika, χ²(1) = 16,352, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+
+Međutim, statistička značajnost ne znači nužno da je razlika praktično velika. U grupi žena zadovoljni putnici čine 42,9%, dok kod muškaraca čine 44,0%, što predstavlja razliku od približno 1,1 procentnog poena. Zbog velikog broja opservacija i ovako mala razlika može biti statistički značajna.
+
+Da bismo procenili jačinu povezanosti, izračunat je Cramerov koeficijent V.
+
+```{r}
+n <- sum(gender_satisfaction_table)
+chi_square <- as.numeric(gender_chisq$statistic)
+
+cramers_v <- sqrt(chi_square / n)
+
+cramers_v
+```
+
+Dobijena vrednost Cramerovog V iznosi približno 0,011, što ukazuje na veoma slabu povezanost između pola i zadovoljstva putnika. Prema tome, iako je povezanost statistički značajna, njena praktična važnost je veoma mala. Na osnovu ove analize ne može se zaključiti da pol značajno određuje zadovoljstvo putnika, već samo da u posmatranom skupu postoji vrlo mala razlika između dve polne grupe.
+
+### Odnos tipa korisnika i zadovoljstva putnika (Customer_Type)
 
 
 
