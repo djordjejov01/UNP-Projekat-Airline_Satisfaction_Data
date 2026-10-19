@@ -364,7 +364,7 @@ data %>% count(Type_of_Travel, name = "Broj") %>% mutate(Procenat = round(Broj /
 data %>% count(Class, name = "Broj") %>% mutate(Procenat = round(Broj / sum(Broj) * 100, 2))
 ```
 
-### Da bismo ove odnose lakše sagledali vizuelno, priazaćemo ih stubićastim dijagramima za svaku kategorijsku promenljivu.
+### Da bismo ove odnose lakše sagledali vizuelno, prikazaćemo ih stubićastim dijagramima za svaku kategorijsku promenljivu.
 
 ```{r}
 # Vizuelizacija kategorijskih promenljivih sa lepšim nazivima i labelama
@@ -375,7 +375,8 @@ p1 <- ggplot(data, aes(x = Gender, fill = Gender)) +
   theme(legend.position = "none")
 p1
 ```
-Zastupljenost putnika muškog i ženskog pola je izuzetno ujednačena, što ukazuje na to da pol sam po sebi verovatno neće imati drastičnu prevagu u strukturi zadovoljstva.
+
+Zastupljenost putnika muškog i ženskog pola je približno ujednačena. To znači da nijedna od ove dve kategorije nije izrazito dominantna u posmatranom uzorku. Međutim, uticaj pola na zadovoljstvo putnika biće moguće ispitati tek u bivarijantnoj analizi, poređenjem raspodele zadovoljstva između ove dve grupe.
 
 ```{r}
 p2 <- ggplot(data, aes(x = Customer_Type, fill = Customer_Type)) + 
@@ -436,7 +437,7 @@ Starost putnika se kreće od 7 do 85 godina, pri čemu je najveća koncentracija
 p_dist <- ggplot(data, aes(x = Flight_Distance)) + 
   geom_histogram(binwidth = 200, fill = "#2ecc71", color = "white", alpha = 0.8) + 
   theme_minimal() + 
-  labs(title = "Distribucija dužine leta", x = "Dužina leta u miljama (Flight Distance)", y = "Broj putnika")
+  labs(title = "Distribucija dužine leta", x = "Dužina leta u miljama (Flight_Distance)", y = "Broj putnika")
 p_dist
 ```
 Distribucija dužine leta pokazuje izraženu pozitivnu zakrivljenost (asimetriju udesno). Najveći broj letova obuhvata kraće i srednje relacije (sa najfrekventnijim opsegom između 300 i 1000 milja), dok je učestalost letova na dužim relacijama (preko 2000 milja) srazmerno manja.
@@ -449,7 +450,27 @@ p_dep_delay <- ggplot(data, aes(x = Departure_Delay_in_Minutes)) +
   labs(title = "Distribucija kašnjenja u polasku", x = "Kašnjenje u polasku (minuti)", y = "Broj putnika")
 p_dep_delay
 ```
-Promenljiva kašnjenja pri polasku ima izrazito asimetričnu raspodelu sa teškim desnim repom. Ogromna većina letova polazi bez ikakvog kašnjenja ili sa minimalnim odstupanjem (vrednosti oko 0), dok mali broj letova beleži duža kašnjenja, što ukazuje na prisustvo ekstremnih vrednosti (outlier-a).
+Promenljiva kašnjenja pri polasku ima izrazito asimetričnu raspodelu sa teškim desnim repom. Ogromna većina letova polazi bez ikakvog kašnjenja ili sa minimalnim odstupanjem (vrednosti oko 0), dok mali broj letova beleži duža kašnjenja. Ove vrednosti predstavljaju potencijalno ekstremne opservacije (outlier-e), što bi dodatno trebalo proveriti pomoću boxplot grafikona ili IQR kriterijuma.
+
+Da bismo dodatno proverili postojanje potencijalnih ekstremnih vrednosti, prikazaćemo boxplot promenljive `Departure_Delay_in_Minutes`.
+
+```{r}
+ggplot(data, aes(y = Departure_Delay_in_Minutes)) +
+  geom_boxplot(
+    fill = "#e67e22",
+    color = "black",
+    alpha = 0.8,
+    na.rm = TRUE) +
+  theme_minimal() +
+  labs(
+    title = "Boxplot kašnjenja pri polasku",
+    y = "Kašnjenje pri polasku (minuti)",
+    x = NULL)
+```
+
+Boxplot potvrđuje da je većina vrednosti kašnjenja pri polasku koncentrisana oko nule, dok je interkvartilni raspon veoma mali. Iznad gornjeg brka (whisker) nalazi se veći broj potencijalno ekstremnih opservacija, koje se protežu do približno 1.600 minuta. Iako ove opservacije predstavljaju manji deo ukupnog broja letova, njihov broj je prema IQR kriterijumu relativno veliki. Ovakav raspored potvrđuje izraženu asimetriju distribucije udesno i ukazuje na postojanje dužih kašnjenja kod manjeg dela letova.
+
+Ove opservacije nećemo automatski uklanjati, jer mogu predstavljati stvarna kašnjenja i važnu informaciju za analizu zadovoljstva putnika. Njihov uticaj biće dodatno razmotren u kasnijim fazama analize i pripreme podataka.
 
 ```{r}
 p_arr_delay <- ggplot(data, aes(x = Arrival_Delay_in_Minutes)) + 
@@ -459,4 +480,27 @@ p_arr_delay <- ggplot(data, aes(x = Arrival_Delay_in_Minutes)) +
   labs(title = "Distribucija kašnjenja u dolasku", x = "Kašnjenje u dolasku (minuti)", y = "Broj putnika")
 p_arr_delay
 ```
-Distribucija kašnjenja u dolasku pokazuje gotovo identičan obrazac i strukturu kao kašnjenje u polasku. Većina putnika stiže na odredište bez kašnjenja, dok se manji broj opservacija sa dužim kašnjenjima pruža ka desnoj strani, što potvrđuje očekivanu visoku povezanost između ovih Mernih promenljivih.
+
+Distribucija kašnjenja u dolasku pokazuje sličan obrazac kao distribucija kašnjenja pri polasku. Većina putnika stiže na odredište bez kašnjenja ili sa minimalnim kašnjenjem, dok se manji broj opservacija sa dužim kašnjenjima proteže ka desnoj strani distribucije. Ovakav oblik ukazuje na izraženu asimetriju udesno i prisustvo potencijalno ekstremnih vrednosti.
+
+Da bismo dodatno proverili potencijalne ekstremne vrednosti, prikazaćemo boxplot promenljive `Arrival_Delay_in_Minutes`.
+
+```{r}
+ggplot(data, aes(y = Arrival_Delay_in_Minutes)) +
+  geom_boxplot(
+    fill = "#e74c3c",
+    color = "black",
+    alpha = 0.8,
+    na.rm = TRUE
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Boxplot kašnjenja pri dolasku",
+    y = "Kašnjenje pri dolasku (minuti)",
+    x = NULL
+  )
+```
+
+Boxplot pokazuje da je većina vrednosti kašnjenja pri dolasku koncentrisana oko nule, dok je interkvartilni raspon mali. Iznad gornjeg brka nalazi se veći broj potencijalno ekstremnih opservacija, koje predstavljaju duža kašnjenja. Ovakav raspored dodatno potvrđuje izraženu asimetriju distribucije udesno.
+
+Potencijalne ekstremne vrednosti nećemo automatski uklanjati, jer mogu predstavljati stvarna kašnjenja i važnu informaciju za analizu zadovoljstva putnika. Njihov uticaj biće dodatno razmotren u kasnijim fazama analize i pripreme podataka. Povezanost između kašnjenja pri polasku i kašnjenja pri dolasku biće ispitana u okviru bivarijantne analize.
