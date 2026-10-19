@@ -504,3 +504,46 @@ ggplot(data, aes(y = Arrival_Delay_in_Minutes)) +
 Boxplot pokazuje da je većina vrednosti kašnjenja pri dolasku koncentrisana oko nule, dok je interkvartilni raspon mali. Iznad gornjeg brka nalazi se veći broj potencijalno ekstremnih opservacija, koje predstavljaju duža kašnjenja. Ovakav raspored dodatno potvrđuje izraženu asimetriju distribucije udesno.
 
 Potencijalne ekstremne vrednosti nećemo automatski uklanjati, jer mogu predstavljati stvarna kašnjenja i važnu informaciju za analizu zadovoljstva putnika. Njihov uticaj biće dodatno razmotren u kasnijim fazama analize i pripreme podataka. Povezanost između kašnjenja pri polasku i kašnjenja pri dolasku biće ispitana u okviru bivarijantne analize.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- ======================================================= -->
+<!-- BIVARIJANTNA ANALIZA - započinje ovde -->
+<!-- ======================================================= -->
+
+
+## Bivarijantna analiza
+
+
+
+
+
