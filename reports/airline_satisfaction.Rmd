@@ -364,7 +364,7 @@ data %>% count(Type_of_Travel, name = "Broj") %>% mutate(Procenat = round(Broj /
 data %>% count(Class, name = "Broj") %>% mutate(Procenat = round(Broj / sum(Broj) * 100, 2))
 ```
 
-### Da bismo ove odnose lakše sagledali vizuelno, prikazaćemo ih stubićastim dijagramima za svaku kategorijsku promenljivu.
+Da bismo ove odnose lakše sagledali vizuelno, prikazaćemo ih stubićastim dijagramima za svaku kategorijsku promenljivu.
 
 ```{r}
 # Vizuelizacija kategorijskih promenljivih sa lepšim nazivima i labelama
@@ -543,7 +543,146 @@ Potencijalne ekstremne vrednosti nećemo automatski uklanjati, jer mogu predstav
 
 ## Bivarijantna analiza
 
+## Bivarijantna analiza numeričkih promenljivih
 
+U okviru bivarijantne analize numeričkih promenljivih ispitaćemo da li i na koji način kontinuirane karakteristike putnika i letova (poput starosti i dužine leta) variraju u zavisnosti od statusa zadovoljstva (`Satisfaction`). Cilj je da utvrdimo da li određene starosne grupe ili specifične dužine letova nose veći rizik od nezadovoljstva putnika.
 
+### Uticaj starosti putnika na zadovoljstvo (Age vs. Satisfaction)
 
+Prvo ćemo uporediti osnovne statističke pokazatelje starosti putnika u zavisnosti od toga da li su bili zadovoljni ili nezadovoljni letom.
+
+```{r}
+# Deskriptivna statistika godina po grupama zadovoljstva
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Prosecna_Starost = mean(Age, na.rm = TRUE),
+    Medijana_Starosti = median(Age, na.rm = TRUE),
+    Min_Starost = min(Age, na.rm = TRUE),
+    Max_Starost = max(Age, na.rm = TRUE)
+  )
+```
+Analiza statističkih pokazatelja pokazuje da su zadovoljni putnici u proseku nešto stariji (prosečna starost oko 41.7 godina, uz medijanu od 43 godine) u poređenju sa nezadovoljnim putnicima, čija je prosečna starost oko 37.7 godina (uz medijanu od 37 godina). Iako raspon godina (od 7 do 85) obuhvata sve starosne kategorije u obe grupe, ovi podaci sugerišu da stariji putnici (često poslovni ljudi sa stabilnijim navikama) u ovom uzorku ispoljavaju nešto viši nivo zadovoljstva uslugom.
+
+Da bismo ove razlike jasnije sagledali vizuelno, prikazaćemo uporedne boxplot dijagrame starosti s obzirom na status zadovoljstva.
+
+```{r}
+ggplot(data, aes(x = Satisfaction, y = Age, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  scale_fill_manual(values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")) +
+  theme_minimal() +
+  labs(
+    title = "Distribucija starosti putnika prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Godine starosti (Age)",
+    fill = "Status"
+  ) +
+  theme(legend.position = "none")
+```
+Vizuelni prikaz boxplot dijagrama dodatno potvrđuje uočene razlike u raspodeli starosti. Vidljivo je da je medijana starosti kod zadovoljnih putnika pomerena naviše u odnosu na nezadovoljne, a interkvartilni rasponi ukazuju na to da starije generacije putnika u ovom uzorku pokazuju stabilniji stepen zadovoljstva uslugama aviokompanije.
+
+### Uticaj dužine leta na zadovoljstvo (Flight Distance vs. Satisfaction)
+
+U nastavku ćemo ispitati da li dužina pređene distance utiče na to hoće li putnik biti zadovoljan uslugom aviokompanije.
+
+```{r}
+# Deskriptivna statistika dužine leta po grupama zadovoljstva
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Prosecna_Distanca = mean(Flight_Distance, na.rm = TRUE),
+    Medijana_Distance = median(Flight_Distance, na.rm = TRUE),
+    Min_Distanca = min(Flight_Distance, na.rm = TRUE),
+    Max_Distanca = max(Flight_Distance, na.rm = TRUE)
+  )
+```
+Analiza statističkih pokazatelja za dužinu leta ukazuje na primetnu razliku između dve grupe putnika. Zadovoljni putnici u proseku putuju na znatno duže relacije (prosečna dužina leta iznosi oko 1530 milja, uz medijanu od 1249 milja), dok nezadovoljni putnici u proseku ostvaruju kraće letove (prosek oko 930 milja, sa medijanom od 674 milja). Ovi podaci sugerišu da putnici na dužim relacijama, uprkos dužem trajanju putovanja, češće iskazuju zadovoljstvo, što može biti povezano sa češćim korišćenjem pogodnosti biznis klase ili kvalitetnijom uslugom na dugim letovima.
+
+```{r}
+p_dist_sat <- ggplot(data, aes(x = Satisfaction, y = Flight_Distance, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  scale_fill_manual(values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")) +
+  theme_minimal() +
+  labs(
+    title = "Distribucija dužine leta prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Dužina leta u miljama (Flight Distance)",
+    fill = "Status"
+  ) +
+  theme(legend.position = "none")
+
+p_dist_sat
+```
+Vizuelni prikaz boxplot dijagrama jasno potvrđuje da grupa zadovoljnih putnika ima znatno višu medijanu i širi interkvartilni opseg dužine leta u poređenju sa nezadovoljnim putnicima. Kod nezadovoljnih putnika distribucija je snažno skoncentrisana na kraćim relacijama, uz prisustvo gornjih outlier-a, što dodatno potvrđuje da duži letovi u ovom uzorku koreliraju sa višim nivoom zadovoljstva putnika.
+
+### Uticaj kašnjenja na zadovoljstvo (Delay vs. Satisfaction)
+
+U nastavku ćemo ispitati da li kašnjenja pri polasku (`Departure_Delay_in_Minutes`) i dolasku (`Arrival_Delay_in_Minutes`) imaju uticaj na krajnje zadovoljstvo putnika.
+
+```{r}
+# Deskriptivna statistika kašnjenja u polasku po grupama zadovoljstva
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Prosecno_Kasnjenje_Polazak = mean(Departure_Delay_in_Minutes, na.rm = TRUE),
+    Medijana_Kasnjenja_Polazak = median(Departure_Delay_in_Minutes, na.rm = TRUE),
+    Maksimalno_Kasnjenje_Polazak = max(Departure_Delay_in_Minutes, na.rm = TRUE)
+  )
+```
+Analiza osnovnih statističkih pokazatelja za kašnjenje pri polasku pokazuje da je medijana i za zadovoljne i za nezadovoljne putnike 0 minuta, što znači da je najmanje polovina letova startovala bez kašnjenja. Ipak, prosečno kašnjenje je nešto veće kod nezadovoljnih putnika (oko 16.4 minuta) u odnosu na zadovoljne (oko 12.5 minuta), što ukazuje na to da duža kašnjenja pri polasku negativno utiču na krajnje zadovoljstvo putnika.
+
+```{r}
+p_dep_sat <- ggplot(data, aes(x = Satisfaction, y = Departure_Delay_in_Minutes, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  coord_cartesian(ylim = c(0, 200)) +
+  scale_fill_manual(values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")) +
+  theme_minimal() +
+  labs(
+    title = "Kašnjenje pri polasku prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Kašnjenje u polasku (minuti)",
+    fill = "Status"
+  ) +
+  theme(legend.position = "none")
+
+p_dep_sat
+```
+Vizuelni prikaz boxplot dijagrama pokazuje da su interkvartilni rasponi i medijane kašnjenja pri polasku za obe grupe putnika smešteni blizu nule, što potkrepljuje činjenicu da većina letova kreće bez značajnijih kašnjenja. Ipak, izdužene linije (brkovi) i gornje ekstremne vrednosti pokazuju da se kod obe kategorije putnika javljaju povremena duga kašnjenja, pri čemu su ona kod nezadovoljnih putnika nešto izraženija u višim percentilima.
+
+### Uticaj kašnjenja u dolasku na zadovoljstvo (Arrival Delay vs. Satisfaction)
+
+Kao dopunu prethodnoj analizi, ispitaćemo i uticaj kašnjenja pri dolasku na krajnje zadovoljstvo putnika, s obzirom na to da kašnjenje na krajnjoj destinaciji često ima direktniji uticaj na utisak o putovanju.
+
+```{r}
+# Deskriptivna statistika kašnjenja u dolasku po grupama zadovoljstva
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Prosecno_Kasnjenje_Dolazak = mean(Arrival_Delay_in_Minutes, na.rm = TRUE),
+    Medijana_Kasnjenja_Dolazak = median(Arrival_Delay_in_Minutes, na.rm = TRUE),
+    Maksimalno_Kasnjenje_Dolazak = max(Arrival_Delay_in_Minutes, na.rm = TRUE)
+  )
+
+```
+
+Analiza statističkih pokazatelja za kašnjenje pri dolasku pokazuje da je medijana i za zadovoljne i za nezadovoljne putnike 0 minuta, što ukazuje na to da je najmanje polovina letova uspešno sletela bez kašnjenja. Međutim, prosečno kašnjenje pri dolasku je primetno veće kod nezadovoljnih putnika (oko 17.1 minuta) u poređenju sa zadovoljnim putnicima (oko 12.5 minuta). Ova razlika potvrđuje da kašnjenja na krajnjoj destinaciji znatno snažnije utiču na formiranje negativnog utiska i nezadovoljstva kod putnika.
+
+```{r}
+p_arr_sat <- ggplot(data, aes(x = Satisfaction, y = Arrival_Delay_in_Minutes, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  coord_cartesian(ylim = c(0, 200)) +
+  scale_fill_manual(values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")) +
+  theme_minimal() +
+  labs(
+    title = "Kašnjenje pri dolasku prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Kašnjenje u dolasku (minuti)",
+    fill = "Status"
+  ) +
+  theme(legend.position = "none")
+
+p_arr_sat
+```
+
+Vizuelni prikaz boxplot dijagrama za kašnjenje pri dolasku pokazuje istovetan trend kao i kašnjenje pri polasku — interkvartilne kutije su uske i smeštene uz nulu, dok izduženi gornji brkovi i ekstremne vrednosti svedoče o povremenim dužim kašnjenjima. Kod nezadovoljnih putnika raspon viših vrednosti kašnjenja je nešto izraženiji, što vizuelno potvrđuje da kašnjenja na destinaciji predstavljaju značajan izvor nezadovoljstva.
 
