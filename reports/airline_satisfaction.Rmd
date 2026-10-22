@@ -686,3 +686,157 @@ p_arr_sat
 
 Vizuelni prikaz boxplot dijagrama za kašnjenje pri dolasku pokazuje istovetan trend kao i kašnjenje pri polasku — interkvartilne kutije su uske i smeštene uz nulu, dok izdužene gornje linije i ekstremne vrednosti svedoče o povremenim dužim kašnjenjima. Kod nezadovoljnih putnika raspon viših vrednosti kašnjenja je nešto izraženiji, što vizuelno potvrđuje da kašnjenja na destinaciji predstavljaju značajan izvor nezadovoljstva.
 
+## Bivarijantna analiza ocena usluga (Service Ratings vs. Satisfaction)
+
+U ovom segmentu analiziramo uticaj pojedinačnih ocena usluga (merenih na skali od 0 do 5) na krajnje zadovoljstvo putnika. Kako bismo identifikovali koje usluge imaju najjaču korelaciju sa zadovoljstvom i izbegli deskriptivno preopterećenje izveštaja, najpre vršimo zbirni pregled prosečnih ocena za sve dostupne kategorije usluga.
+
+### 1. Zbirni pregled svih ocena usluga
+
+Ukrštanjem prosečnih vrednosti svih ocena sa statusom zadovoljstva dobijamo jasan uvid u to u kojim segmentima usluga nastaju najveće razlike u percepciji kvaliteta.
+
+```{r}
+# Zbirni pregled prosečnih ocena za sve usluge prema statusu zadovoljstva
+zbirne_ocene <- data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    WiFi = mean(Inflight_wifi_service, na.rm = TRUE),
+    Online_Cekiranje = mean(Online_boarding, na.rm = TRUE),
+    Udobnost_Sedista = mean(Seat_comfort, na.rm = TRUE),
+    Zabava_na_Letu = mean(Inflight_entertainment, na.rm = TRUE),
+    Cistoca = mean(Cleanliness, na.rm = TRUE),
+    Hrana_i_Pice = mean(Food_and_drink, na.rm = TRUE),
+    Usluga_u_Avionu = mean(On_board_service, na.rm = TRUE),
+    Rukovanje_Prtljagom = mean(Baggage_handling, na.rm = TRUE)
+  )
+
+zbirne_ocene
+```
+**Komentar zbirne tabele i izbor ključnih ocena:**
+
+Na osnovu zbirnog pregleda prosečnih ocena, uočava se jasna diferencijacija između zadovoljnih i nezadovoljnih putnika u nekoliko ključnih kategorija usluga. Kao ključne promenljive sa najvećim uticajem na krajnji status zadovoljstva izdvojile su se sledeće četiri usluge:
+
+1. **Online čekiranje (`Online_boarding`)** — sa najvećom razlikom u prosečnoj oceni (4.03 kod zadovoljnih naspram 2.66 kod nezadovoljnih), što ukazuje da je jednostavnost procesa prijave na let primarni pokretač pozitivnog utiska.
+2. **Zabava na letu (`Inflight_entertainment`)** — gde zadovoljni putnici daju prosek od 3.96, dok nezadovoljni daju samo 2.89.
+3. **Udobnost sedišta (`Seat_comfort`)** — gde je prosečna ocena zadovoljnih 3.97 u odnosu na 3.04 kod nezadovoljnih, čime se potvrdjuje značaj fizičkog komfora tokom leta.
+4. **Wi-Fi usluga (`Inflight_wifi_service`)** — sa prosekom od 3.16 kod zadovoljnih naspram 2.40 kod nezadovoljnih putnika.
+
+U nastavku ćemo za ove četiri izabrane ključne ocene prikazati detaljnu deskriptivnu statistiku i odgovarajuće boxplot dijagrame radi analize njihove distribucije.
+
+### 2. Detaljna analiza ključnih ocena usluga
+
+#### A. Online čekiranje (Online Boarding)
+
+```{r}
+# Deskriptivna statistika za Online Boarding
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Prosecna_Ocena = mean(Online_boarding, na.rm = TRUE),
+    Medijana = median(Online_boarding, na.rm = TRUE),
+    Min = min(Online_boarding, na.rm = TRUE),
+    Max = max(Online_boarding, na.rm = TRUE)
+  )
+
+p_boarding <- ggplot(data, aes(x = Satisfaction, y = Online_boarding, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  scale_fill_manual(values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")) +
+  theme_minimal() +
+  labs(
+    title = "Ocena online čekiranja prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Ocena online čekiranja (0-5)",
+    fill = "Status"
+  ) +
+  theme(legend.position = "none")
+
+p_boarding
+```
+
+Vizuelni prikaz boxplot dijagrama jasno ilustruje značajnu razliku u distribuciji ocena za online čekiranje. Kod zadovoljnih putnika interkvartilni opseg je pozicioniran u samom vrhu skale (između 4 i 5), pri čemu medijana iznosi 4, dok se spuštena donja granična linija pruža do ocene 3 uz ređe ekstremne vrednosti u nižim kategorijama. S druge strane, kod nezadovoljnih putnika medijana se nalazi na oceni 3, a interkvartilni opseg obuhvata raspon od 2 do 3. Ovakav razmak između distribucija potvrđuje da je efikasno i jednostavno online čekiranje jedan od ključnih faktora koji direktno doprinose opštem zadovoljstvu putnika.
+
+#### B. Zabava na letu (Inflight Entertainment)
+```{r}
+# Deskriptivna statistika za Inflight Entertainment
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Prosecna_Ocena = mean(Inflight_entertainment, na.rm = TRUE),
+    Medijana = median(Inflight_entertainment, na.rm = TRUE),
+    Min = min(Inflight_entertainment, na.rm = TRUE),
+    Max = max(Inflight_entertainment, na.rm = TRUE)
+  )
+
+p_ent <- ggplot(data, aes(x = Satisfaction, y = Inflight_entertainment, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  scale_fill_manual(values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")) +
+  theme_minimal() +
+  labs(
+    title = "Ocena zabave na letu prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Ocena zabave na letu (0-5)",
+    fill = "Status"
+  ) +
+  theme(legend.position = "none")
+
+p_ent
+```
+
+Boxplot dijagram za zabavu na letu ukazuje na jasnu diferencijaciju u ocenama između posmatranih grupa. Kod zadovoljnih putnika interkvartilni opseg je pozicioniran visoko (između 4 i 5), sa medijanom na oceni 4, dok se donja granična linija spušta do ocene 3 uz ređe ekstremne niske vrednosti. Kod nezadovoljnih putnika medijana iznosi 3, a interkvartilni opseg je znatno širi i obuhvata vrednosti od 2 do 4, pri čemu se granične linije protežu duž celog raspona skale (od 0 do 5). Ovakav raspored potvrđuje da je kvalitet sadržaja za zabavu tokom leta značajan faktor koji doprinosi boljem doživljaju putovanja.
+
+#### C. Udobnost sedišta (Seat Comfort)
+``` {r}
+# Deskriptivna statistika za Seat Comfort
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Prosecna_Ocena = mean(Seat_comfort, na.rm = TRUE),
+    Medijana = median(Seat_comfort, na.rm = TRUE),
+    Min = min(Seat_comfort, na.rm = TRUE),
+    Max = max(Seat_comfort, na.rm = TRUE)
+  )
+
+p_seat <- ggplot(data, aes(x = Satisfaction, y = Seat_comfort, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  scale_fill_manual(values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")) +
+  theme_minimal() +
+  labs(
+    title = "Ocena udobnosti sedišta prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Ocena udobnosti sedišta (0-5)",
+    fill = "Status"
+  ) +
+  theme(legend.position = "none")
+
+p_seat
+```
+
+Boxplot dijagram za ocenu udobnosti sedišta prikazuje jasnu strukturnu razliku između zadovoljnih i nezadovoljnih putnika. Kod zadovoljnih putnika interkvartilni opseg se nalazi u gornjoj trećini skale (između 4 i 5), pri čemu je medijana pozicionirana na vrednosti 4, a donja granična linija doseže ocenu 3 uz sporadične ekstremne vrednosti na nižim ocenama. Za razliku od njih, kod nezadovoljnih putnika medijana iznosi 3, dok je interkvartilni opseg širi i obuhvata raspon od 2 do 4, uz granične linije koje se protežu duž čitave skale (od 0 do 5). Ovakva raspodela potvrđuje da je fizički komfor tokom leta jedan od ključnih faktora koji direktno utiču na formiranje pozitivnog utiska putnika.
+
+#### D. Wi-Fi usluga u avionu (Inflight Wi-Fi Service)
+```{r}
+# Deskriptivna statistika za Inflight Wi-Fi
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Prosecna_Ocena = mean(Inflight_wifi_service, na.rm = TRUE),
+    Medijana = median(Inflight_wifi_service, na.rm = TRUE),
+    Min = min(Inflight_wifi_service, na.rm = TRUE),
+    Max = max(Inflight_wifi_service, na.rm = TRUE)
+  )
+
+p_wifi <- ggplot(data, aes(x = Satisfaction, y = Inflight_wifi_service, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  scale_fill_manual(values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")) +
+  theme_minimal() +
+  labs(
+    title = "Ocena Wi-Fi usluge prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Ocena Wi-Fi usluge (0-5)",
+    fill = "Status"
+  ) +
+  theme(legend.position = "none")
+
+p_wifi
+```
+
+Vizuelna analiza boxplot dijagrama za Wi-Fi uslugu ukazuje na znatnu varijabilnost i jasnu razliku u percepciji kvaliteta. Kod zadovoljnih putnika medijana se nalazi na oceni 4, dok interkvartilni opseg obuhvata raspon od 2 do 5, uz donju graničnu liniju koja se spušta do ocene 0. Kod nezadovoljnih putnika medijana iznosi 2, a interkvartilni opseg je primetno sužen i kreće se od 2 do 3, uz granične linije koje pokrivaju opseg od 1 do 4. Ovakav raspored potvrđuje da je stabilna Wi-Fi konekcija važan faktor zadovoljstva, dok niska ocena internet usluge često prati opšte nezadovoljstvo putnika.
