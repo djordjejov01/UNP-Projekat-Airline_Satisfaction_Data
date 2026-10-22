@@ -1,10 +1,10 @@
 ---
 title: "Airline satisfaction data"
 output:
-  html_document: default
-  pdf_document: default
   word_document: 
     reference_docx: template.docx
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -507,45 +507,338 @@ Potencijalne ekstremne vrednosti nećemo automatski uklanjati, jer mogu predstav
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<!-- ======================================================= -->
-<!-- BIVARIJANTNA ANALIZA - započinje ovde -->
-<!-- ======================================================= -->
-
-
 ## Bivarijantna analiza
+
+Bivarijantna analiza predstavlja deo eksplorativne analize u okviru koga se ispituje odnos između dve promenljive. Za razliku od univarijantne analize, u kojoj se svaka promenljiva posmatra pojedinačno, bivarijantna analiza omogućava da utvrdimo da li između promenljivih postoje određeni obrasci, razlike ili povezanosti.
+
+U ovom radu posebnu pažnju posvetićemo ispitivanju odnosa između karakteristika putnika i leta, sa jedne strane, i ciljne promenljive `Satisfaction`, sa druge strane. Cilj je da se utvrdi da li se zadovoljstvo putnika razlikuje u zavisnosti od pola, tipa korisnika, svrhe putovanja, klase leta, starosti, dužine leta, vremena kašnjenja i ocena pojedinačnih usluga.
+
+Kod kategorijskih promenljivih analiziraćemo raspodelu zadovoljnih i nezadovoljnih putnika unutar svake kategorije. Na primer, ispitaćemo da li se procenat zadovoljnih putnika razlikuje između poslovne i ekonomske klase, između lojalnih i dislojalnih korisnika, kao i između poslovnih i ličnih putovanja. Za ove prikaze koristićemo tabele frekvencija, procentualne stubičaste dijagrame i, po potrebi, test nezavisnosti.
+
+Kod numeričkih promenljivih poredićemo njihove distribucije između zadovoljnih i nezadovoljnih putnika. Na taj način možemo ispitati da li se, na primer, starost putnika, dužina leta ili vreme kašnjenja razlikuju između ove dve grupe. Za prikaz odnosa koristićemo boxplot grafikone, a kod promenljivih za koje je to opravdano i korelacionu analizu.
+
+Posebno ćemo analizirati odnos između ocena usluga i ciljne promenljive `Satisfaction`. Na osnovu tih analiza možemo utvrditi da li su više ocene usluga češće povezane sa zadovoljnim putnicima i koje karakteristike potencijalno imaju najveći značaj za predviđanje zadovoljstva.
+
+Rezultate bivarijantne analize nećemo tumačiti kao dokaz uzročno-posledične veze. Uočene razlike i povezanosti opisuju obrasce u posmatranom skupu podataka i poslužiće kao osnova za izbor promenljivih i izgradnju modela mašinskog učenja.
+
+
+### Bivarijantna analiza kategorijskih promenljivih
+
+#### Odnos pola i zadovoljstva putnika
+
+U ovom delu ispitaćemo da li se zadovoljstvo putnika razlikuje u zavisnosti od pola. Za razliku od univarijantne analize, u kojoj smo posmatrali samo zastupljenost muškaraca i žena, sada ćemo analizirati raspodelu kategorija `Satisfied` i `Not Satisfied` unutar svake polne grupe.
+
+Za poređenje ćemo koristiti relativne frekvencije, odnosno procenat zadovoljnih i nezadovoljnih putnika unutar svake kategorije pola. Korišćenje procenata je važno zato što omogućava pravično poređenje grupa, čak i kada njihov ukupan broj nije potpuno jednak.
+
+```{r}
+gender_satisfaction <- data %>%
+  count(Gender, Satisfaction, name = "Broj") %>%
+  group_by(Gender) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+gender_satisfaction
+```
+
+
+Da bismo lakše uporedili zadovoljstvo putnika između polnih grupa, prikazaćemo proporcionalni stubičasti dijagram. Visina svakog stuba predstavlja 100% putnika unutar jedne polne grupe, dok boje prikazuju udeo zadovoljnih i nezadovoljnih putnika.
+
+```{r}
+ggplot(data, aes(x = Gender, fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(
+    labels = scales::percent_format()
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema polu",
+    x = "Pol",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+Na osnovu tabele i proporcionalnog stubičastog dijagrama uočavamo da su raspodele zadovoljstva kod muškaraca i žena veoma slične. U grupi žena 42,9% putnika je zadovoljno, dok je 57,1% nezadovoljno. Kod muškaraca zadovoljni putnici čine 44,0%, a nezadovoljni 56,0%.
+
+Razlika u procentu zadovoljnih putnika između muškaraca i žena iznosi približno 1,1 procentni poen, što predstavlja malu razliku. Na osnovu ovog prikaza ne uočava se značajna razlika u zadovoljstvu putnika između dve polne grupe. Ipak, grafički prikaz sam po sebi ne predstavlja formalni statistički test, pa bi se značajnost eventualne povezanosti mogla dodatno proveriti hi-kvadrat testom.
+
+
+Da bismo formalno proverili da li postoji povezanost između pola i zadovoljstva putnika, primenjen je hi-kvadrat test nezavisnosti. Nultom hipotezom pretpostavlja se da pol i zadovoljstvo putnika nisu povezani, dok alternativna hipoteza pretpostavlja da između njih postoji povezanost.
+
+```{r}
+gender_satisfaction_table <- table(data$Gender, data$Satisfaction)
+
+gender_satisfaction_table
+
+gender_chisq <- chisq.test(gender_satisfaction_table)
+
+gender_chisq
+```
+
+Rezultat hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između pola i zadovoljstva putnika, χ²(1) = 16,352, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+
+Međutim, statistička značajnost ne znači nužno da je razlika praktično velika. U grupi žena zadovoljni putnici čine 42,9%, dok kod muškaraca čine 44,0%, što predstavlja razliku od približno 1,1 procentnog poena. Zbog velikog broja opservacija i ovako mala razlika može biti statistički značajna.
+
+Da bismo procenili jačinu povezanosti, izračunat je Cramerov koeficijent V.
+
+```{r}
+n <- sum(gender_satisfaction_table)
+chi_square <- as.numeric(gender_chisq$statistic)
+
+cramers_v <- sqrt(chi_square / n)
+
+cramers_v
+```
+
+Dobijena vrednost Cramerovog V iznosi približno 0,011, što ukazuje na veoma slabu povezanost između pola i zadovoljstva putnika. Prema tome, iako je povezanost statistički značajna, njena praktična važnost je veoma mala. Na osnovu ove analize ne može se zaključiti da pol značajno određuje zadovoljstvo putnika, već samo da u posmatranom skupu postoji vrlo mala razlika između dve polne grupe.
+
+### Odnos tipa korisnika i zadovoljstva putnika (`Customer_Type`)
+
+
+U nastavku ćemo ispitati da li se zadovoljstvo putnika razlikuje između lojalnih i dislojalnih korisnika. U univarijantnoj analizi uočeno je da su lojalni korisnici znatno zastupljeniji u odnosu na dislojalne korisnike. Zbog toga ćemo u ovoj analizi koristiti relativne frekvencije, odnosno procenat zadovoljnih i nezadovoljnih putnika unutar svake kategorije korisnika.
+
+Na ovaj način možemo da proverimo da li se raspodela zadovoljstva razlikuje između ove dve grupe, nezavisno od njihovog ukupnog broja u skupu podataka.
+
+```{r}
+customer_satisfaction <- data %>%
+  count(Customer_Type, Satisfaction, name = "Broj") %>%
+  group_by(Customer_Type) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+customer_satisfaction
+```
+
+Da bismo vizuelno uporedili zadovoljstvo između lojalnih i dislojalnih korisnika, prikazaćemo proporcionalni stubičasti dijagram.
+
+```{r}
+ggplot(data, aes(x = Customer_Type, fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(
+    labels = scales::percent_format()
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema tipu korisnika",
+    x = "Tip korisnika",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+Na osnovu tabele i proporcionalnog stubičastog dijagrama uočava se jasna razlika u raspodeli zadovoljstva između lojalnih i dislojalnih korisnika. Kod dislojalnih korisnika zadovoljni putnici čine 24,0%, dok nezadovoljni čine 76,0% ukupnog broja putnika u toj grupi. Kod lojalnih korisnika zadovoljni putnici čine 47,8%, a nezadovoljni 52,2%.
+
+Udeo zadovoljnih putnika kod lojalnih korisnika veći je za približno 23,8 procentnih poena u odnosu na dislojalne korisnike. Ova razlika ukazuje na moguću povezanost između tipa korisnika i zadovoljstva putnika, koju ćemo formalno proveriti hi-kvadrat testom nezavisnosti.
+
+Nulta hipoteza glasi da su tip korisnika i zadovoljstvo putnika nezavisne promenljive. Alternativna hipoteza glasi da između njih postoji povezanost.
+
+```{r}
+customer_satisfaction_table <- table(
+  data$Customer_Type,
+  data$Satisfaction
+)
+
+customer_satisfaction_table
+
+customer_chisq <- chisq.test(
+  customer_satisfaction_table,
+  correct = FALSE
+)
+
+customer_chisq
+```
+
+
+Za procenu jačine povezanosti između tipa korisnika i zadovoljstva putnika izračunaćemo Cramerov koeficijent V.
+
+```{r}
+n <- sum(customer_satisfaction_table)
+chi_square <- as.numeric(customer_chisq$statistic)
+
+customer_cramers_v <- sqrt(chi_square / n)
+
+customer_cramers_v
+```
+
+
+Rezultat Pearsonovog hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između tipa korisnika i zadovoljstva putnika, χ²(1) = 4494,2, p < 0,001. Na osnovu ovog rezultata odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+
+
+Cramerov koeficijent V iznosi 0,186, što ukazuje na povezanost slabog intenziteta, ali sa većim praktičnim značajem nego u slučaju promenljive `Gender`. Iako je povezanost statistički značajna, rezultat ne dokazuje da tip korisnika direktno uzrokuje zadovoljstvo ili nezadovoljstvo. On pokazuje da se raspodela zadovoljstva značajno razlikuje između lojalnih i dislojalnih korisnika u posmatranom skupu podataka.
+
+
+### Odnos tipa putovanja i zadovoljstva putnika (`Type_of_Travel`)
+
+
+U nastavku ćemo ispitati da li se zadovoljstvo putnika razlikuje u zavisnosti od svrhe putovanja. Promenljiva `Type_of_Travel` sadrži dve kategorije: `Business Travel` i `Personal Travel`.
+
+U ovoj analizi koristićemo relativne frekvencije, odnosno procenat zadovoljnih i nezadovoljnih putnika unutar svake kategorije svrhe putovanja. Na taj način možemo pravično da uporedimo ove dve grupe, nezavisno od njihovog ukupnog broja u skupu podataka.
+
+```{r}
+travel_satisfaction <- data %>%
+  count(Type_of_Travel, Satisfaction, name = "Broj") %>%
+  group_by(Type_of_Travel) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+travel_satisfaction
+```
+
+Da bismo vizuelno uporedili raspodelu zadovoljstva prema svrsi putovanja, prikazaćemo proporcionalni stubičasti dijagram.
+
+```{r}
+ggplot(data, aes(x = Type_of_Travel, fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(
+    labels = scales::percent_format()
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema svrsi putovanja",
+    x = "Svrha putovanja",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+Razlika u procentu zadovoljnih putnika između poslovnih i ličnih putovanja iznosi 48,3 procentnih poena. Ova razlika ukazuje na moguću povezanost između svrhe putovanja i zadovoljstva putnika, koju ćemo formalno proveriti hi-kvadrat testom nezavisnosti.
+
+```{r}
+travel_satisfaction_table <- table(
+  data$Type_of_Travel,
+  data$Satisfaction
+)
+
+travel_satisfaction_table
+
+travel_chisq <- chisq.test(
+  travel_satisfaction_table,
+  correct = FALSE
+)
+
+travel_chisq
+```
+
+```{r}
+n <- sum(travel_satisfaction_table)
+chi_square <- as.numeric(travel_chisq$statistic)
+
+travel_cramers_v <- sqrt(chi_square / n)
+
+travel_cramers_v
+```
+
+Rezultat Pearsonovog hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između svrhe putovanja i zadovoljstva putnika, χ²(1) = 26284, p < 0,001. Na osnovu ovog rezultata odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+
+
+Cramerov koeficijent V iznosi 0,450, što ukazuje na relativno jaku povezanost između svrhe putovanja i zadovoljstva putnika. Ova povezanost je izraženija nego kod prethodno analiziranih promenljivih `Gender` i `Customer_Type`, pa svrha putovanja u ovom skupu podataka ima veći potencijalni značaj za objašnjenje zadovoljstva putnika.
+
+Ipak, hi-kvadrat test i Cramerov V ne dokazuju uzročno-posledičnu vezu. Rezultati pokazuju da se zadovoljstvo putnika značajno razlikuje između poslovnih i ličnih putovanja u posmatranom skupu podataka, ali ne dokazuju da svrha putovanja direktno uzrokuje zadovoljstvo ili nezadovoljstvo.
+
+Konačna procena prediktorskog značaja promenljive `Type_of_Travel` biće izvršena u kasnijoj fazi, kroz izgradnju i evaluaciju modela mašinskog učenja i analizu važnosti promenljivih.
+
+
+### Odnos klase leta i zadovoljstva putnika (`Class`)
+
+
+U nastavku ćemo ispitati da li se zadovoljstvo putnika razlikuje u zavisnosti od klase leta. Promenljiva `Class` sadrži tri kategorije: `Business`, `Eco` i `Eco Plus`.
+
+Za poređenje ovih grupa koristićemo relativne frekvencije, odnosno procenat zadovoljnih i nezadovoljnih putnika unutar svake klase leta. Na ovaj način možemo da uporedimo raspodelu zadovoljstva između klasa, nezavisno od njihovog ukupnog broja u skupu podataka.
+
+
+```{r}
+class_satisfaction <- data %>%
+  count(Class, Satisfaction, name = "Broj") %>%
+  group_by(Class) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+class_satisfaction
+```
+Da bismo vizuelno uporedili raspodelu zadovoljstva između različitih klasa leta, prikazaćemo proporcionalni stubičasti dijagram. Svaki stub predstavlja 100% putnika unutar jedne klase, dok boje prikazuju procenat zadovoljnih i nezadovoljnih putnika.
+
+```{r}
+ggplot(data, aes(x = Class, fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(
+    labels = scales::percent_format()
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema klasi leta",
+    x = "Klasa leta",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+Na osnovu tabele i proporcionalnog stubičastog dijagrama uočava se izražena razlika u raspodeli zadovoljstva između klasa leta. U poslovnoj klasi zadovoljni putnici čine 69,4%, dok nezadovoljni čine 30,6%. U ekonomskoj klasi zadovoljni putnici čine 18,8%, a nezadovoljni 81,2%. Kod klase `Eco Plus` zadovoljni putnici čine 24,6%, dok nezadovoljni čine 75,4%.
+
+Najveći udeo zadovoljnih putnika zabeležen je u poslovnoj klasi. U odnosu na ekonomsku klasu, razlika iznosi približno 50,67 procentnih poena, dok u odnosu na klasu `Eco Plus` iznosi približno 44,80 procentnih poena. Ovi rezultati ukazuju na moguću povezanost između klase leta i zadovoljstva putnika, koju ćemo formalno proveriti hi-kvadrat testom nezavisnosti.
+
+Nulta hipoteza glasi da su klasa leta i zadovoljstvo putnika nezavisne promenljive. Alternativna hipoteza glasi da između klase leta i zadovoljstva putnika postoji povezanost.
+
+```{r}
+class_satisfaction_table <- table(
+  data$Class,
+  data$Satisfaction
+)
+
+class_satisfaction_table
+
+class_chisq <- chisq.test(
+  class_satisfaction_table,
+  correct = FALSE
+)
+
+class_chisq
+```
+
+Za procenu jačine povezanosti između klase leta i zadovoljstva putnika izračunaćemo Cramerov koeficijent V.
+
+```{r}
+n <- sum(class_satisfaction_table)
+chi_square <- as.numeric(class_chisq$statistic)
+
+class_cramers_v <- sqrt(chi_square / n)
+
+class_cramers_v
+```
+
+Rezultat Pearsonovog hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između klase leta i zadovoljstva putnika, χ²(2) = 32906, p < 0,001. Na osnovu ovog rezultata odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+
+
+Cramerov koeficijent V iznosi 0,503, što ukazuje na jaku povezanost između klase leta i zadovoljstva putnika. Ovaj rezultat pokazuje da se raspodela zadovoljstva značajno razlikuje između različitih klasa leta i da klasa leta ima izraženiji potencijalni značaj za objašnjenje zadovoljstva nego prethodno analizirane kategorijske promenljive.
+
+Ipak, hi-kvadrat test i Cramerov V ne dokazuju uzročno-posledičnu vezu. Rezultat pokazuje da postoji povezanost između klase leta i zadovoljstva putnika u posmatranom skupu podataka, ali ne dokazuje da klasa leta direktno uzrokuje zadovoljstvo ili nezadovoljstvo. Konačna procena prediktorskog značaja promenljive `Class` biće izvršena u kasnijoj fazi kroz izgradnju i evaluaciju modela mašinskog učenja.
 
 ## Bivarijantna analiza numeričkih promenljivih
 
 U okviru bivarijantne analize numeričkih promenljivih ispitaćemo da li i na koji način kontinuirane karakteristike putnika i letova (poput starosti i dužine leta) variraju u zavisnosti od statusa zadovoljstva (`Satisfaction`). Cilj je da utvrdimo da li određene starosne grupe ili specifične dužine letova nose veći rizik od nezadovoljstva putnika.
+
 
 ### Uticaj starosti putnika na zadovoljstvo (Age vs. Satisfaction)
 
@@ -685,4 +978,3 @@ p_arr_sat
 ```
 
 Vizuelni prikaz boxplot dijagrama za kašnjenje pri dolasku pokazuje istovetan trend kao i kašnjenje pri polasku — interkvartilne kutije su uske i smeštene uz nulu, dok izdužene gornje linije i ekstremne vrednosti svedoče o povremenim dužim kašnjenjima. Kod nezadovoljnih putnika raspon viših vrednosti kašnjenja je nešto izraženiji, što vizuelno potvrđuje da kašnjenja na destinaciji predstavljaju značajan izvor nezadovoljstva.
-
