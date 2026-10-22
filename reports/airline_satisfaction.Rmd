@@ -647,7 +647,7 @@ p_dep_sat <- ggplot(data, aes(x = Satisfaction, y = Departure_Delay_in_Minutes, 
 
 p_dep_sat
 ```
-Vizuelni prikaz boxplot dijagrama pokazuje da su interkvartilni rasponi i medijane kašnjenja pri polasku za obe grupe putnika smešteni blizu nule, što potkrepljuje činjenicu da većina letova kreće bez značajnijih kašnjenja. Ipak, izdužene linije (brkovi) i gornje ekstremne vrednosti pokazuju da se kod obe kategorije putnika javljaju povremena duga kašnjenja, pri čemu su ona kod nezadovoljnih putnika nešto izraženija u višim percentilima.
+Vizuelni prikaz boxplot dijagrama pokazuje da su interkvartilni rasponi i medijane kašnjenja pri polasku za obe grupe putnika smešteni blizu nule, što potkrepljuje činjenicu da većina letova kreće bez značajnijih kašnjenja. Ipak, izdužene linije i gornje ekstremne vrednosti pokazuju da se kod obe kategorije putnika javljaju povremena duga kašnjenja, pri čemu su ona kod nezadovoljnih putnika nešto izraženija u višim percentilima.
 
 ### Uticaj kašnjenja u dolasku na zadovoljstvo (Arrival Delay vs. Satisfaction)
 
@@ -684,5 +684,5 @@ p_arr_sat <- ggplot(data, aes(x = Satisfaction, y = Arrival_Delay_in_Minutes, fi
 p_arr_sat
 ```
 
-Vizuelni prikaz boxplot dijagrama za kašnjenje pri dolasku pokazuje istovetan trend kao i kašnjenje pri polasku — interkvartilne kutije su uske i smeštene uz nulu, dok izduženi gornji brkovi i ekstremne vrednosti svedoče o povremenim dužim kašnjenjima. Kod nezadovoljnih putnika raspon viših vrednosti kašnjenja je nešto izraženiji, što vizuelno potvrđuje da kašnjenja na destinaciji predstavljaju značajan izvor nezadovoljstva.
+Vizuelni prikaz boxplot dijagrama za kašnjenje pri dolasku pokazuje istovetan trend kao i kašnjenje pri polasku — interkvartilne kutije su uske i smeštene uz nulu, dok izdužene gornje linije i ekstremne vrednosti svedoče o povremenim dužim kašnjenjima. Kod nezadovoljnih putnika raspon viših vrednosti kašnjenja je nešto izraženiji, što vizuelno potvrđuje da kašnjenja na destinaciji predstavljaju značajan izvor nezadovoljstva.
 
