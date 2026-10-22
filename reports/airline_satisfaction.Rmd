@@ -789,3 +789,83 @@ Ipak, hi-kvadrat test i Cramerov V ne dokazuju uzročno-posledičnu vezu. Rezult
 
 Konačna procena prediktorskog značaja promenljive `Type_of_Travel` biće izvršena u kasnijoj fazi, kroz izgradnju i evaluaciju modela mašinskog učenja i analizu važnosti promenljivih.
 
+
+### Odnos klase leta i zadovoljstva putnika (`Class`)
+
+
+U nastavku ćemo ispitati da li se zadovoljstvo putnika razlikuje u zavisnosti od klase leta. Promenljiva `Class` sadrži tri kategorije: `Business`, `Eco` i `Eco Plus`.
+
+Za poređenje ovih grupa koristićemo relativne frekvencije, odnosno procenat zadovoljnih i nezadovoljnih putnika unutar svake klase leta. Na ovaj način možemo da uporedimo raspodelu zadovoljstva između klasa, nezavisno od njihovog ukupnog broja u skupu podataka.
+
+
+```{r}
+class_satisfaction <- data %>%
+  count(Class, Satisfaction, name = "Broj") %>%
+  group_by(Class) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+class_satisfaction
+```
+Da bismo vizuelno uporedili raspodelu zadovoljstva između različitih klasa leta, prikazaćemo proporcionalni stubičasti dijagram. Svaki stub predstavlja 100% putnika unutar jedne klase, dok boje prikazuju procenat zadovoljnih i nezadovoljnih putnika.
+
+```{r}
+ggplot(data, aes(x = Class, fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(
+    labels = scales::percent_format()
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema klasi leta",
+    x = "Klasa leta",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+Na osnovu tabele i proporcionalnog stubičastog dijagrama uočava se izražena razlika u raspodeli zadovoljstva između klasa leta. U poslovnoj klasi zadovoljni putnici čine 69,4%, dok nezadovoljni čine 30,6%. U ekonomskoj klasi zadovoljni putnici čine 18,8%, a nezadovoljni 81,2%. Kod klase `Eco Plus` zadovoljni putnici čine 24,6%, dok nezadovoljni čine 75,4%.
+
+Najveći udeo zadovoljnih putnika zabeležen je u poslovnoj klasi. U odnosu na ekonomsku klasu, razlika iznosi približno 50,67 procentnih poena, dok u odnosu na klasu `Eco Plus` iznosi približno 44,80 procentnih poena. Ovi rezultati ukazuju na moguću povezanost između klase leta i zadovoljstva putnika, koju ćemo formalno proveriti hi-kvadrat testom nezavisnosti.
+
+Nulta hipoteza glasi da su klasa leta i zadovoljstvo putnika nezavisne promenljive. Alternativna hipoteza glasi da između klase leta i zadovoljstva putnika postoji povezanost.
+
+```{r}
+class_satisfaction_table <- table(
+  data$Class,
+  data$Satisfaction
+)
+
+class_satisfaction_table
+
+class_chisq <- chisq.test(
+  class_satisfaction_table,
+  correct = FALSE
+)
+
+class_chisq
+```
+
+Za procenu jačine povezanosti između klase leta i zadovoljstva putnika izračunaćemo Cramerov koeficijent V.
+
+```{r}
+n <- sum(class_satisfaction_table)
+chi_square <- as.numeric(class_chisq$statistic)
+
+class_cramers_v <- sqrt(chi_square / n)
+
+class_cramers_v
+```
+
+Rezultat Pearsonovog hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između klase leta i zadovoljstva putnika, χ²(2) = 32906, p < 0,001. Na osnovu ovog rezultata odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+
+
+Cramerov koeficijent V iznosi 0,503, što ukazuje na jaku povezanost između klase leta i zadovoljstva putnika. Ovaj rezultat pokazuje da se raspodela zadovoljstva značajno razlikuje između različitih klasa leta i da klasa leta ima izraženiji potencijalni značaj za objašnjenje zadovoljstva nego prethodno analizirane kategorijske promenljive.
+
+Ipak, hi-kvadrat test i Cramerov V ne dokazuju uzročno-posledičnu vezu. Rezultat pokazuje da postoji povezanost između klase leta i zadovoljstva putnika u posmatranom skupu podataka, ali ne dokazuje da klasa leta direktno uzrokuje zadovoljstvo ili nezadovoljstvo. Konačna procena prediktorskog značaja promenljive `Class` biće izvršena u kasnijoj fazi kroz izgradnju i evaluaciju modela mašinskog učenja.
