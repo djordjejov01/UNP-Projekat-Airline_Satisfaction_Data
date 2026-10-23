@@ -1131,3 +1131,74 @@ p_wifi
 ```
 
 Vizuelna analiza boxplot dijagrama za Wi-Fi uslugu ukazuje na znatnu varijabilnost i jasnu razliku u percepciji kvaliteta. Kod zadovoljnih putnika medijana se nalazi na oceni 4, dok interkvartilni opseg obuhvata raspon od 2 do 5, uz donju graničnu liniju koja se spušta do ocene 0. Kod nezadovoljnih putnika medijana iznosi 2, a interkvartilni opseg je primetno sužen i kreće se od 2 do 3, uz granične linije koje pokrivaju opseg od 1 do 4. Ovakav raspored potvrđuje da je stabilna Wi-Fi konekcija važan faktor zadovoljstva, dok niska ocena internet usluge često prati opšte nezadovoljstvo putnika.
+
+# Čišćenje podataka (Data Cleaning)
+
+Nakon završene eksplorativne analize podataka (EDA), u kojoj su identifikovane ključne karakteristike, distribucije i potencijalni nedostaci u skupu podataka, prelazi se na fazu čišćenja podataka. Cilj ove faze je da se otklone uočeni nedostaci, obezbedi konzistentnost i pripreme podaci visokog kvaliteta za kasniji inženjering obeležja i izgradnju prediktivnih modela.
+
+## Obrada nedostajućih vrednosti (Missing Values)
+
+Tokom provere kvaliteta podataka u EDA fazi, utvrđeno je da kolona `Arrival_Delay_in_Minutes` sadrži 393 nedostajuće vrednosti (`NA`), dok ostale numeričke i kategorijske promenljive nemaju nedostajuće vrednosti. S obzirom na to da modeli mašinskog učenja i određene statističke procedure zahtevaju potpune podatke bez praznih polja, neophodno je definisati odgovarajuću strategiju imputacije.
+
+Za rešavanje nedostajućih vrednosti u koloni `Arrival_Delay_in_Minutes` koristićemo strategiju popunjavanja na osnovu korelacije sa kašnjenjem pri polasku (`Departure_Delay_in_Minutes`), ili ćemo u slučajevima manjih odstupanja nedostajuće vrednosti zameniti medijanom, odnosno nulom ukoliko kašnjenje na polasku nije zabeleženo.
+
+### 1. Provera broja NA vrednosti pre čišćenja
+```{r}
+cat("Broj NA vrednosti pre čišćenja:\n")
+colSums(is.na(data))
+```
+
+### 2. Strategija imputacije za Arrival_Delay_in_Minutes
+
+Ukoliko je Arrival_Delay nedostajuća, a Departure poznata, možemo je zameniti vrednošću departure-a, 
+ili u krajnjem slučaju medijanom ove kolone. Ovde koristimo medijanu da ne bismo narušili distribuciju.
+
+```{r}
+median_arr_delay <- median(data$Arrival_Delay_in_Minutes, na.rm = TRUE)
+
+data <- data %>%
+  mutate(
+    Arrival_Delay_in_Minutes = ifelse(is.na(Arrival_Delay_in_Minutes), median_arr_delay, Arrival_Delay_in_Minutes)
+  )
+```
+### 3. Provera nakon čišćenja
+```{r}
+cat("Broj NA vrednosti nakon čišćenja:\n")
+colSums(is.na(data))
+```
+
+## Provera duplikata i čuvanje očišćenih podataka
+
+Nakon rešavanja nedostajućih vrednosti, sprovodi se provera postojanja eventualnih dupliranih redova u skupu podataka. Uklanjanjem duplikata osigurava se regularnost i sprečava narušavanje statističkih rezultata u kasnijim fazama modelovanja.
+
+### 1. Provera broja duplikata
+```{r}
+broj_duplikata <- sum(duplicated(data))
+cat("Broj pronađenih duplikata:", broj_duplikata, "\n")
+
+if (broj_duplikata > 0) {
+  data <- data %>% distinct()
+  cat("Duplikati su uspešno uklonjeni.\n")
+} else {
+  cat("U skupu podataka nisu pronađeni duplikati, tako da dimenzije ostaju nepromenjene.\n")
+}
+```
+
+### 2. Finalna verifikacija dimenzija skupa podataka nakon čišćenja
+
+Dimenzije skupa podataka nakon čišćenja (redovi, kolone):
+
+```{r}
+dim(data)
+```
+
+### 3. Čuvanje očišćenog skupa podataka u novi fajl
+```{r}
+if(!dir.exists("../data")) {
+  dir.create("../data", recursive = TRUE)
+}
+
+write.csv(data, "../data/airline_cleaned.csv", row.names = FALSE)
+```
+Očišćeni skup podataka je uspešno sačuvan na putanji '../data/airline_cleaned.csv'.
+
