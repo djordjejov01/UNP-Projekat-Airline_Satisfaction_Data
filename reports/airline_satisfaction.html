@@ -1342,6 +1342,113 @@ p_wifi</code></pre>
 </div>
 </div>
 </div>
+<div id="čišćenje-podataka-data-cleaning" class="section level1">
+<h1>Čišćenje podataka (Data Cleaning)</h1>
+<p>Nakon završene eksplorativne analize podataka (EDA), u kojoj su identifikovane ključne karakteristike, distribucije i potencijalni nedostaci u skupu podataka, prelazi se na fazu čišćenja podataka. Cilj ove faze je da se otklone uočeni nedostaci, obezbedi konzistentnost i pripreme podaci visokog kvaliteta za kasniji inženjering obeležja i izgradnju prediktivnih modela.</p>
+<div id="obrada-nedostajućih-vrednosti-missing-values" class="section level2">
+<h2>Obrada nedostajućih vrednosti (Missing Values)</h2>
+<p>Tokom provere kvaliteta podataka u EDA fazi, utvrđeno je da kolona <code>Arrival_Delay_in_Minutes</code> sadrži 393 nedostajuće vrednosti (<code>NA</code>), dok ostale numeričke i kategorijske promenljive nemaju nedostajuće vrednosti. S obzirom na to da modeli mašinskog učenja i određene statističke procedure zahtevaju potpune podatke bez praznih polja, neophodno je definisati odgovarajuću strategiju imputacije.</p>
+<p>Za rešavanje nedostajućih vrednosti u koloni <code>Arrival_Delay_in_Minutes</code> koristićemo strategiju popunjavanja na osnovu korelacije sa kašnjenjem pri polasku (<code>Departure_Delay_in_Minutes</code>), ili ćemo u slučajevima manjih odstupanja nedostajuće vrednosti zameniti medijanom, odnosno nulom ukoliko kašnjenje na polasku nije zabeleženo.</p>
+<div id="provera-broja-na-vrednosti-pre-čišćenja" class="section level3">
+<h3>1. Provera broja NA vrednosti pre čišćenja</h3>
+<pre class="r"><code>cat(&quot;Broj NA vrednosti pre čišćenja:\n&quot;)</code></pre>
+<pre><code>## Broj NA vrednosti pre cišcenja:</code></pre>
+<pre class="r"><code>colSums(is.na(data))</code></pre>
+<pre><code>##                            Gender                     Customer_Type 
+##                                 0                                 0 
+##                               Age                    Type_of_Travel 
+##                                 0                                 0 
+##                             Class                   Flight_Distance 
+##                                 0                                 0 
+##             Inflight_wifi_service Departure_Arrival_time_convenient 
+##                                 0                                 0 
+##            Ease_of_Online_booking                     Gate_location 
+##                                 0                                 0 
+##                    Food_and_drink                   Online_boarding 
+##                                 0                                 0 
+##                      Seat_comfort            Inflight_entertainment 
+##                                 0                                 0 
+##                  On_board_service                  Leg_room_service 
+##                                 0                                 0 
+##                  Baggage_handling                   Checkin_service 
+##                                 0                                 0 
+##                       Cleanliness        Departure_Delay_in_Minutes 
+##                                 0                                 0 
+##          Arrival_Delay_in_Minutes                      Satisfaction 
+##                               393                                 0</code></pre>
+</div>
+<div id="strategija-imputacije-za-arrival_delay_in_minutes" class="section level3">
+<h3>2. Strategija imputacije za Arrival_Delay_in_Minutes</h3>
+<p>Ukoliko je Arrival_Delay nedostajuća, a Departure poznata, možemo je zameniti vrednošću departure-a, ili u krajnjem slučaju medijanom ove kolone. Ovde koristimo medijanu da ne bismo narušili distribuciju.</p>
+<pre class="r"><code>median_arr_delay &lt;- median(data$Arrival_Delay_in_Minutes, na.rm = TRUE)
+
+data &lt;- data %&gt;%
+  mutate(
+    Arrival_Delay_in_Minutes = ifelse(is.na(Arrival_Delay_in_Minutes), median_arr_delay, Arrival_Delay_in_Minutes)
+  )</code></pre>
+</div>
+<div id="provera-nakon-čišćenja" class="section level3">
+<h3>3. Provera nakon čišćenja</h3>
+<pre class="r"><code>cat(&quot;Broj NA vrednosti nakon čišćenja:\n&quot;)</code></pre>
+<pre><code>## Broj NA vrednosti nakon cišcenja:</code></pre>
+<pre class="r"><code>colSums(is.na(data))</code></pre>
+<pre><code>##                            Gender                     Customer_Type 
+##                                 0                                 0 
+##                               Age                    Type_of_Travel 
+##                                 0                                 0 
+##                             Class                   Flight_Distance 
+##                                 0                                 0 
+##             Inflight_wifi_service Departure_Arrival_time_convenient 
+##                                 0                                 0 
+##            Ease_of_Online_booking                     Gate_location 
+##                                 0                                 0 
+##                    Food_and_drink                   Online_boarding 
+##                                 0                                 0 
+##                      Seat_comfort            Inflight_entertainment 
+##                                 0                                 0 
+##                  On_board_service                  Leg_room_service 
+##                                 0                                 0 
+##                  Baggage_handling                   Checkin_service 
+##                                 0                                 0 
+##                       Cleanliness        Departure_Delay_in_Minutes 
+##                                 0                                 0 
+##          Arrival_Delay_in_Minutes                      Satisfaction 
+##                                 0                                 0</code></pre>
+</div>
+</div>
+<div id="provera-duplikata-i-čuvanje-očišćenih-podataka" class="section level2">
+<h2>Provera duplikata i čuvanje očišćenih podataka</h2>
+<p>Nakon rešavanja nedostajućih vrednosti, sprovodi se provera postojanja eventualnih dupliranih redova u skupu podataka. Uklanjanjem duplikata osigurava se regularnost i sprečava narušavanje statističkih rezultata u kasnijim fazama modelovanja.</p>
+<div id="provera-broja-duplikata" class="section level3">
+<h3>1. Provera broja duplikata</h3>
+<pre class="r"><code>broj_duplikata &lt;- sum(duplicated(data))
+cat(&quot;Broj pronađenih duplikata:&quot;, broj_duplikata, &quot;\n&quot;)</code></pre>
+<pre><code>## Broj pronadenih duplikata: 0</code></pre>
+<pre class="r"><code>if (broj_duplikata &gt; 0) {
+  data &lt;- data %&gt;% distinct()
+  cat(&quot;Duplikati su uspešno uklonjeni.\n&quot;)
+} else {
+  cat(&quot;U skupu podataka nisu pronađeni duplikati, tako da dimenzije ostaju nepromenjene.\n&quot;)
+}</code></pre>
+<pre><code>## U skupu podataka nisu pronadeni duplikati, tako da dimenzije ostaju nepromenjene.</code></pre>
+</div>
+<div id="finalna-verifikacija-dimenzija-skupa-podataka-nakon-čišćenja" class="section level3">
+<h3>2. Finalna verifikacija dimenzija skupa podataka nakon čišćenja</h3>
+<p>Dimenzije skupa podataka nakon čišćenja (redovi, kolone):</p>
+<pre class="r"><code>dim(data)</code></pre>
+<pre><code>## [1] 129880     22</code></pre>
+</div>
+<div id="čuvanje-očišćenog-skupa-podataka-u-novi-fajl" class="section level3">
+<h3>3. Čuvanje očišćenog skupa podataka u novi fajl</h3>
+<pre class="r"><code>if(!dir.exists(&quot;../data&quot;)) {
+  dir.create(&quot;../data&quot;, recursive = TRUE)
+}
+
+write.csv(data, &quot;../data/airline_cleaned.csv&quot;, row.names = FALSE)</code></pre>
+<p>Očišćeni skup podataka je uspešno sačuvan na putanji ‘../data/airline_cleaned.csv’.</p>
+</div>
+</div>
+</div>
 
 
 
