@@ -1202,3 +1202,424 @@ write.csv(data, "../data/airline_cleaned.csv", row.names = FALSE)
 ```
 Očišćeni skup podataka je uspešno sačuvan na putanji '../data/airline_cleaned.csv'.
 
+## Feature Engineering
+
+U ovom delu analize biće kreirane nove promenljive na osnovu postojećih podataka, sa ciljem da se postojeće informacije predstave na jednostavniji i pregledniji način. Posebna pažnja biće posvećena kašnjenjima letova, kako bi se ispitalo da li njihova kategorizacija može doprineti boljem razumevanju podataka.
+
+### Kategorizacija kašnjenja pri polasku
+
+Promenljiva `Departure_Delay_in_Minutes` prikazuje kašnjenje leta pri polasku izraženo u minutima. Radi lakše interpretacije, ova numerička promenljiva biće podeljena u četiri kategorije: bez kašnjenja, malo kašnjenje, umereno kašnjenje i veliko kašnjenje. Na ovaj način moguće je jednostavnije sagledati raspodelu letova prema dužini kašnjenja.
+
+```{r}
+data <- data %>%
+  mutate(
+    Departure_Delay_Category = case_when(
+      Departure_Delay_in_Minutes == 0 ~ "No delay",
+      Departure_Delay_in_Minutes <= 15 ~ "Small delay",
+      Departure_Delay_in_Minutes <= 60 ~ "Moderate delay",
+      Departure_Delay_in_Minutes > 60 ~ "Large delay",
+      TRUE ~ NA_character_
+    ),
+    Departure_Delay_Category = factor(
+      Departure_Delay_Category,
+      levels = c(
+        "No delay",
+        "Small delay",
+        "Moderate delay",
+        "Large delay"
+      ),
+      ordered = TRUE
+    )
+  )
+```
+
+```{r}
+departure_delay_summary <- data %>%
+  count(Departure_Delay_Category, .drop = FALSE) %>%
+  mutate(
+    Procenat = round(n / sum(n) * 100, 2)
+  )
+
+departure_delay_summary
+```
+Na osnovu dobijenih rezultata, može se uočiti da 56,48% letova nije imalo kašnjenje pri polasku. Malo kašnjenje zabeleženo je kod 21,39% letova, dok je umereno kašnjenje prisutno kod 15,22% letova. Veliko kašnjenje imalo je 6,91% letova.
+
+Rezultati pokazuju da više od polovine letova polazi na vreme, dok su velika kašnjenja znatno ređa u odnosu na ostale kategorije. Kategorizacijom numeričke promenljive omogućena je jednostavnija interpretacija raspodele kašnjenja pri polasku.
+
+### Kategorizacija kašnjenja pri dolasku
+
+Pored kašnjenja pri polasku, važno je analizirati i kašnjenje pri dolasku, jer ono pruža dodatne informacije o tačnosti letova. Promenljiva `Arrival_Delay_in_Minutes` biće podeljena u iste četiri kategorije kao i kašnjenje pri polasku, kako bi se raspodela ova dva tipa kašnjenja mogla lakše uporediti.
+
+```{r}
+data <- data %>%
+  mutate(
+    Arrival_Delay_Category = case_when(
+      Arrival_Delay_in_Minutes == 0 ~ "No delay",
+      Arrival_Delay_in_Minutes <= 15 ~ "Small delay",
+      Arrival_Delay_in_Minutes <= 60 ~ "Moderate delay",
+      Arrival_Delay_in_Minutes > 60 ~ "Large delay",
+      TRUE ~ NA_character_
+    ),
+    Arrival_Delay_Category = factor(
+      Arrival_Delay_Category,
+      levels = c(
+        "No delay",
+        "Small delay",
+        "Moderate delay",
+        "Large delay"
+      ),
+      ordered = TRUE
+    )
+  )
+```
+
+```{r}
+arrival_delay_summary <- data %>%
+  count(Arrival_Delay_Category, .drop = FALSE) %>%
+  mutate(
+    Procenat = round(n / sum(n) * 100, 2)
+  )
+
+arrival_delay_summary
+```
+Na osnovu dobijenih rezultata, može se uočiti da 56,32% letova nije imalo kašnjenje pri dolasku. Malo kašnjenje zabeleženo je kod 20,92% letova, dok je umereno kašnjenje prisutno kod 15,76% letova. Veliko kašnjenje zabeleženo je kod 7,00% letova.
+
+Rezultati pokazuju da više od polovine letova stiže bez kašnjenja, dok su velika kašnjenja zastupljena u manjem procentu. U poređenju sa kašnjenjem pri polasku, udeo letova sa velikim kašnjenjem nešto je veći pri dolasku (7,00% u odnosu na 6,91%). Kategorizacija omogućava pregledniju analizu i jednostavnije poređenje kašnjenja pri polasku i dolasku.
+
+### Poređenje kašnjenja pri polasku i dolasku
+
+Nakon pojedinačne analize kašnjenja pri polasku i dolasku, korisno je uporediti raspodelu ovih kategorija kako bi se uočile eventualne razlike. U tu svrhu biće prikazana zajednička tabela sa brojem letova za svaku kombinaciju kategorija kašnjenja pri polasku i dolasku. Ovakav prikaz omogućava detaljniji uvid u odnos između kašnjenja pri polasku i kašnjenja pri dolasku.
+
+```{r}
+delay_comparison <- data %>%
+  count(Departure_Delay_Category, Arrival_Delay_Category) %>%
+  pivot_wider(
+    names_from = Arrival_Delay_Category,
+    values_from = n,
+    values_fill = 0
+  )
+
+delay_comparison
+```
+
+Na osnovu zajedničke tabele može se uočiti da se kategorije kašnjenja pri polasku i dolasku često podudaraju. Od letova bez kašnjenja pri polasku, najveći broj, odnosno 59.498 letova, stigao je bez kašnjenja. Slično tome, kod letova sa umerenim kašnjenjem pri polasku, najzastupljenija je bila ista kategorija kašnjenja pri dolasku, sa 13.423 leta. Kod letova sa velikim kašnjenjem pri polasku, 7.858 letova imalo je i veliko kašnjenje pri dolasku.
+
+Ovi rezultati ukazuju na to da su kategorije kašnjenja pri polasku i dolasku povezane. Ipak, za precizniju procenu jačine ove povezanosti potrebna je dodatna statistička analiza.
+
+```{r}
+delay_comparison_long <- data %>%
+  count(Departure_Delay_Category, Arrival_Delay_Category)
+
+ggplot(
+  delay_comparison_long,
+  aes(
+    x = Arrival_Delay_Category,
+    y = Departure_Delay_Category,
+    fill = n
+  )
+) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = n), size = 3) +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue"
+  ) +
+  labs(
+    title = "Poređenje kašnjenja pri polasku i dolasku",
+    x = "Kašnjenje pri dolasku",
+    y = "Kašnjenje pri polasku",
+    fill = "Broj letova"
+  ) +
+  theme_minimal()
+```
+
+### Povezanost kašnjenja pri polasku i dolasku
+
+Tabela kombinacija kategorija pokazala je da se kašnjenje pri polasku i dolasku često podudaraju. Da bismo jačinu te povezanosti procenili formalno, primenjujemo hi-kvadrat test nezavisnosti nad kategorijama kašnjenja, a nad originalnim numeričkim promenljivama izračunavamo Pearsonov koeficijent korelacije. Pošto tabela kašnjenja ima 4 × 4 polja, Cramerov V se ovde računa sa korekcijom `min(r-1, c-1) = 3`.
+
+```{r}
+delay_table <- table(
+  data$Departure_Delay_Category,
+  data$Arrival_Delay_Category
+)
+
+delay_chisq <- chisq.test(delay_table, correct = FALSE)
+delay_chisq
+
+delay_cramers_v <- sqrt(
+  as.numeric(delay_chisq$statistic) /
+    (sum(delay_table) * (min(dim(delay_table)) - 1))
+)
+delay_cramers_v
+
+cor(
+  data$Departure_Delay_in_Minutes,
+  data$Arrival_Delay_in_Minutes
+)
+```
+Rezultat Pearsonovog hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između kategorija kašnjenja pri polasku i dolasku, χ²(9) = 162873, p < 0,001. Na osnovu ovog rezultata odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+
+Cramerov koeficijent V iznosi 0,647, što ukazuje na jaku povezanost kategorija. Pearsonov koeficijent korelacije između numeričkih vrednosti kašnjenja iznosi 0,959, što predstavlja gotovo potpunu linearnu povezanost. Korelacija je viša od Cramerovog V jer kategorizacija odbacuje deo informacije: letovi koji se nalaze blizu granice dve kategorije (npr. 14 i 16 minuta) svrstavaju se u različite kategorije iako se gotovo ne razlikuju.
+
+Ovako visoka povezanost znači da kašnjenje pri polasku i kašnjenje pri dolasku nose gotovo istu informaciju, što ukazuje na problem multikolinearnosti. Zbog toga ih nećemo istovremeno koristiti kao nezavisne promenljive u istom modelu bez provere. Konačna odluka o tome koju promenljivu zadržati biće doneta u multivarijantnoj analizi i fazi modelovanja.
+
+### Razlika između kašnjenja pri dolasku i polasku
+
+Pošto su kašnjenja pri polasku i dolasku gotovo iste informacije, druga promenljiva donosi malo novog. Ono što ih razlikuje jeste šta se desilo tokom leta. Zato kreiramo promenljivu `Delay_Difference`, koja pokazuje da li je avion tokom leta nadoknadio vreme (negativna vrednost) ili ga dodatno izgubio (pozitivna vrednost).
+
+```{r}
+data <- data %>%
+  mutate(
+    Delay_Difference = Arrival_Delay_in_Minutes - Departure_Delay_in_Minutes
+  )
+
+summary(data$Delay_Difference)
+```
+
+```{r}
+ggplot(data, aes(x = Delay_Difference)) +
+  geom_histogram(binwidth = 5, fill = "#9b59b6", color = "white", alpha = 0.8) +
+  coord_cartesian(xlim = c(-60, 60)) +
+  theme_minimal() +
+  labs(
+    title = "Razlika između kašnjenja pri dolasku i polasku",
+    x = "Razlika u minutima (dolazak - polazak)",
+    y = "Broj putnika"
+  )
+```
+
+Promenljiva `Delay_Difference` ima medijanu 0 i interkvartilni raspon od -2 do 0 minuta, što znači da se kod većine letova kašnjenje pri dolasku gotovo ne razlikuje od kašnjenja pri polasku. Histogram potvrđuje ovaj nalaz: raspodela je gotovo simetrična oko nule, sa izrazito visokim vrhom u kome se nalazi više od 60.000 letova, dok se broj letova naglo smanjuje u obe strane. Prosečna razlika iznosi svega 0,33 minuta, pa letovi u proseku ne nadoknađuju niti značajno gube vreme tokom leta.
+
+Raspon vrednosti, od -530 do 234 minuta, pokazuje da postoje retki letovi sa izuzetno velikom razlikom. Ove opservacije nećemo uklanjati, jer mogu predstavljati stvarne slučajeve (npr. let koji je znatno nadoknadio veliko kašnjenje pri polasku), a njihov uticaj biće razmotren u kasnijim fazama.
+
+Zbog toga što je većina vrednosti koncentrisana oko nule, očekuje se da `Delay_Difference` sama ima slab prediktivni značaj. Njena vrednost je u tome što zamenjuje redundantnu informaciju: umesto da modelu dajemo oba kašnjenja, možemo zadržati kašnjenje pri polasku i razliku, koje nisu međusobno gotovo identične.
+
+### Starosne grupe
+
+Starost je u skupu podataka kontinuirana promenljiva, ali se putnici prirodno razlikuju po životnim fazama (deca i tinejdžeri, mlađi odrasli, radno aktivni, stariji). Zbog lakše interpretacije kreiramo uređenu kategorijsku promenljivu `Age_Group`. Granice grupa predstavljaju izbor autora i mogu se prilagoditi.
+
+```{r}
+data <- data %>%
+  mutate(
+    Age_Group = cut(
+      Age,
+      breaks = c(0, 17, 34, 49, 64, Inf),
+      labels = c("Under 18", "18-34", "35-49", "50-64", "65+"),
+      ordered_result = TRUE
+    )
+  )
+
+data %>%
+  count(Age_Group) %>%
+  mutate(Procenat = round(n / sum(n) * 100, 2))
+```
+Najbrojnija je starosna grupa 35-49 godina, sa 44.352 putnika (34,15%), a slede grupe 18-34 godine (30,41%) i 50-64 godine (23,25%). Zajedno, putnici starosti od 18 do 49 godina čine 64,56% uzorka. Najmanje su zastupljeni putnici mlađi od 18 godina (7,58%) i putnici stariji od 65 godina (4,61%). Ovakva raspodela u skladu je sa prethodnom univarijantnom analizom, u kojoj je uočen vrhunac starosti u rasponu od 40 do 50 godina, kao i sa činjenicom da uzorak čine pretežno poslovni putnici.
+
+Iako je grupa 65+ najmanja, ona obuhvata 5.983 putnika, što je dovoljan broj opservacija za pouzdano poređenje udela zadovoljnih putnika između grupa.
+```{r}
+ggplot(data, aes(x = Age_Group, fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(
+    values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema starosnoj grupi",
+    x = "Starosna grupa",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+Na osnovu proporcionalnog stubičastog dijagrama uočava se da udeo nezadovoljnih putnika ima oblik slova U u odnosu na starosnu grupu. Najveći udeo nezadovoljnih imaju najmlađa grupa (Under 18) i najstarija grupa (65+), kod kojih nezadovoljni čine više od 75% putnika, dok je najmanji udeo nezadovoljnih u grupama 35-49 i 50-64 godine, gde iznosi nešto manje od 50%. Ovo pokazuje da veza između starosti i zadovoljstva nije linearna, što je bilo skriveno u poređenju prosečne starosti iz ranije analize. Uočena razlika ne mora biti posledica same starosti, već i drugih promenljivih koje se razlikuju između starosnih grupa, što će biti provereno u multivarijantnoj analizi.
+
+### Kategorije dužine leta
+
+Distribucija promenljive `Flight_Distance` je izrazito asimetrična udesno, pa dužinu leta grupišemo u tri kategorije: kratke (do 500 milja), srednje (od 500 do 1500 milja) i duge letove (preko 1500 milja). Granice su izbor autora i mogu se prilagoditi.
+
+```{r}
+data <- data %>%
+  mutate(
+    Flight_Distance_Category = cut(
+      Flight_Distance,
+      breaks = c(0, 500, 1500, Inf),
+      labels = c("Short", "Medium", "Long"),
+      ordered_result = TRUE,
+      include.lowest = TRUE
+    )
+  )
+
+data %>%
+  count(Flight_Distance_Category) %>%
+  mutate(Procenat = round(n / sum(n) * 100, 2))
+```
+Kategorije dužine leta su relativno ujednačeno zastupljene: srednji letovi čine 38,69% putnika (50.252), kratki 31,01% (40.276), a dugi 30,30% (39.352). Ovakva raspodela je povoljna za poređenje zadovoljstva između kategorija, jer nijedna kategorija nije zanemarljivo mala.
+
+```{r}
+ggplot(data, aes(x = Flight_Distance_Category, fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(
+    values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema dužini leta",
+    x = "Kategorija dužine leta",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+Na osnovu proporcionalnog stubičastog dijagrama uočava se da su dugi letovi najbolje ocenjeni: nezadovoljni putnici čine nešto više od 25% putnika na dugim relacijama, dok je kod kratkih i srednjih letova njihov udeo sličan i kreće se između 50% i 75%. Ovaj nalaz je u skladu sa ranijim poređenjem prosečne dužine leta, u kome su zadovoljni putnici u proseku putovali na duže relacije. Uočena razlika ne mora biti posledica same dužine leta, već i drugih promenljivih koje se razlikuju između kategorija (npr. klase leta), što će biti provereno u multivarijantnoj analizi.
+
+### Uređena promenljiva klase leta
+
+Klase leta imaju prirodan redosled (Eco < Eco Plus < Business), koji se kod običnog faktora ne uzima u obzir. Zbog toga kreiramo uređenu verziju promenljive `Class_Ordered`, dok originalnu kolonu `Class` zadržavamo.
+
+```{r}
+data <- data %>%
+  mutate(
+    Class_Ordered = factor(
+      Class,
+      levels = c("Eco", "Eco Plus", "Business"),
+      ordered = TRUE
+    )
+  )
+
+levels(data$Class_Ordered)
+table(data$Class, data$Class_Ordered)
+```
+Redosled nivoa je ispravno postavljen (Eco < Eco Plus < Business). Tabela ukrštanja originalne i uređene promenljive pokazuje da se svaka klasa preslikala u tačno jedan nivo: Business 62.160, Eco 58.309 i Eco Plus 9.411 putnika, što ukupno iznosi 129.880 opservacija. Time je potvrđeno da pri kreiranju uređene promenljive nijedan putnik nije izgubljen ni pogrešno razvrstan.
+
+### Broj neocenjenih usluga
+
+U EDA delu utvrdili smo da vrednost 0 u ocenama usluga označava da usluga nije ocenjena, a ne da je putnik dao najnižu ocenu. Broj usluga koje putnik nije ocenio može sam po sebi nositi informaciju (npr. putnik koji nije koristio WiFi ni online ukrcavanje). Zbog toga kreiramo promenljivu `Not_Rated_Count`, koja za svakog putnika broji koliko je od 13 usluga ostalo neocenjeno.
+
+```{r}
+data <- data %>%
+  mutate(
+    Not_Rated_Count = rowSums(across(all_of(rating_columns)) == 0)
+  )
+
+data %>%
+  count(Not_Rated_Count) %>%
+  mutate(Procenat = round(n / sum(n) * 100, 2))
+```
+Velika većina putnika, njih 119.567 (92,06%), ocenila je svih 13 usluga. Jednu uslugu nije ocenilo 4.548 putnika (3,50%), dve usluge 2.457 putnika (1,89%), tri usluge 2.565 putnika (1,97%), a četiri usluge 743 putnika (0,57%). Nijedan putnik nije imao više od četiri neocenjene usluge. Ukupno je, dakle, 8,0% putnika imalo bar jednu neocenjenu uslugu. Grupa sa četiri neocenjene usluge je veoma mala, pa je procenat zadovoljnih unutar nje manje pouzdan nego kod ostalih grupa.
+```{r}
+ggplot(data, aes(x = factor(Not_Rated_Count), fill = Satisfaction)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(
+    values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo putnika prema broju neocenjenih usluga",
+    x = "Broj neocenjenih usluga",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+Na osnovu proporcionalnog stubičastog dijagrama uočava se da veza između broja neocenjenih usluga i zadovoljstva nije linearna. Udeo nezadovoljnih putnika je najsličniji kod putnika sa nijednom, jednom i dve neocenjene usluge, pri čemu je kod jedne i dve nešto veći, dok je kod putnika sa tri i četiri neocenjene usluge znatno manji. Ovo pokazuje da broj neocenjenih usluga nosi informaciju o zadovoljstvu, ali da se ona ispoljava tek kod većeg broja neocenjenih usluga. Treba imati u vidu da su grupe sa tri i četiri neocenjene usluge male (1,97% i 0,57% uzorka), pa su procene za njih manje pouzdane. Uočeni obrazac može zavisiti od toga koje su usluge ostale neocenjene, kao i od drugih promenljivih (npr. svrhe putovanja ili klase leta), što će biti provereno u multivarijantnoj analizi.
+
+### Zbirne ocene usluga
+
+Ocene usluga su međusobno brojne (13 promenljivih), a mnoge od njih opisuju sličan aspekt putovanja. Zbog toga srodne usluge grupišemo u tri zbirne ocene, koje se računaju kao prosek ocena unutar grupe. Pri računanju proseka vrednost 0 (usluga nije ocenjena) izostavljamo, kako neocenjena usluga ne bi snizila prosek kao da je dobila najnižu ocenu.
+
+Usluge grupišemo na sledeći način:
+
+- **Pre_Flight_Score:** online rezervacija, pogodnost vremena polaska i dolaska, online ukrcavanje, prijava na let i lokacija gejta,
+- **Comfort_Score:** udobnost sedišta, prostor za noge i čistoća,
+- **Service_Score:** WiFi, zabava na letu, hrana i piće i usluga osoblja.
+
+Promenljiva `Baggage_handling` ostaje samostalna. Ovo grupisanje predstavlja procenu autora i biće proveravano korelacionom analizom u multivarijantnoj analizi.
+
+```{r}
+pre_flight_cols <- c(
+  "Ease_of_Online_booking",
+  "Departure_Arrival_time_convenient",
+  "Online_boarding",
+  "Checkin_service",
+  "Gate_location"
+)
+
+comfort_cols <- c("Seat_comfort", "Leg_room_service", "Cleanliness")
+
+service_cols <- c(
+  "Inflight_wifi_service",
+  "Inflight_entertainment",
+  "Food_and_drink",
+  "On_board_service"
+)
+
+# Prosek ocena u redu, uz izostavljanje nula (neocenjene usluge)
+row_mean_rated <- function(df, cols) {
+  m <- as.matrix(df[, cols])
+  m[m == 0] <- NA
+  res <- rowMeans(m, na.rm = TRUE)
+  res[is.nan(res)] <- NA   # nijedna usluga iz grupe nije ocenjena
+  res
+}
+
+data <- data %>%
+  mutate(
+    Pre_Flight_Score = row_mean_rated(data, pre_flight_cols),
+    Comfort_Score    = row_mean_rated(data, comfort_cols),
+    Service_Score    = row_mean_rated(data, service_cols)
+  )
+
+summary(data %>% select(Pre_Flight_Score, Comfort_Score, Service_Score))
+```
+Sve tri zbirne ocene kreću se u rasponu od 1 do 5, što potvrđuje da su neocenjene usluge (vrednost 0) pravilno izostavljene iz proseka. U zbirnim ocenama nema nedostajućih vrednosti, što znači da je svaki putnik ocenio bar jednu uslugu u svakoj od tri grupe. Prosečne vrednosti su prilično slične: najviše je ocenjen komfor (prosek 3,37), zatim usluge tokom leta (3,19), a najniže pripreme pre leta (3,15). Medijane su vrlo bliske prosecima, što ukazuje na relativno simetrične raspodele.
+
+Da bismo ispitali da li se zbirne ocene razlikuju između zadovoljnih i nezadovoljnih putnika, prikazaćemo uporedne boxplot dijagrame.
+
+```{r}
+data %>%
+  select(Satisfaction, Pre_Flight_Score, Comfort_Score, Service_Score) %>%
+  pivot_longer(-Satisfaction, names_to = "Grupa", values_to = "Ocena") %>%
+  ggplot(aes(x = Satisfaction, y = Ocena, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  facet_wrap(~ Grupa) +
+  scale_fill_manual(
+    values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zbirne ocene usluga prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Prosečna ocena (1-5)"
+  ) +
+  theme(legend.position = "none")
+```
+
+Boxplot dijagrami pokazuju da su sve tri zbirne ocene više kod zadovoljnih nego kod nezadovoljnih putnika. Najveća razlika uočava se kod ocena komfora (`Comfort_Score`) i usluga tokom leta (`Service_Score`): medijana komfora iznosi oko 4 kod zadovoljnih i oko 3 kod nezadovoljnih, dok medijana usluga tokom leta iznosi oko 3,75 kod zadovoljnih i oko 2,75 kod nezadovoljnih. Kod ocene priprema pre leta (`Pre_Flight_Score`) razlika je manja (medijana oko 3,4 naspram 3,0), a kutije se u većoj meri preklapaju, pa ova grupa slabije razdvaja dve kategorije putnika. Kod zadovoljnih putnika uočavaju se i pojedinačne niske vrednosti komfora i usluga tokom leta, što znači da se zadovoljstvo može javiti i uz neke niske ocene.
+
+Ovi rezultati sugerišu da su komfor i usluge tokom leta povezaniji sa zadovoljstvom nego priprema pre leta, ali konačna procena značaja ovih grupa biće izvršena u multivarijantnoj analizi i fazi modelovanja.
+
+## Pregled novih promenljivih i čuvanje skupa
+
+Nakon kreiranja novih promenljivih proveravamo njihovu strukturu i dimenzije skupa podataka.
+
+```{r}
+data %>%
+  select(
+    Departure_Delay_Category, Arrival_Delay_Category, Delay_Difference,
+    Age_Group, Flight_Distance_Category, Class_Ordered,
+    Not_Rated_Count, Pre_Flight_Score, Comfort_Score, Service_Score
+  ) %>%
+  str()
+
+dim(data)
+```
+Skup podataka sada sadrži 129.880 opservacija i 32 promenljive, što znači da je dodato 10 novih promenljivih. Kategorije kašnjenja, starosne grupe, kategorije dužine leta i klasa leta kreirani su kao uređeni faktori sa ispravnim redosledom nivoa, dok su `Delay_Difference`, `Not_Rated_Count` i tri zbirne ocene numeričke promenljive.
+
+## Zaključak feature engineeringa
+
+U ovoj fazi kreirano je 10 novih promenljivih. Kašnjenja pri polasku i dolasku kategorisana su u četiri kategorije, a utvrđeno je da su ona gotovo potpuno linearno povezana (r = 0,959), pa je kreirana promenljiva `Delay_Difference` koja izdvaja ono što se desilo tokom leta. Starost i dužina leta svrstane su u kategorije (`Age_Group`, `Flight_Distance_Category`), pri čemu je kod starosti uočena U-veza sa nezadovoljstvom. Klasa leta predstavljena je i kao uređeni faktor. Vrednosti 0 u ocenama usluga tretirane su kao neocenjene usluge, pa je kreiran `Not_Rated_Count`, a 13 ocena grupisano je u tri zbirne ocene, od kojih komfor i usluge tokom leta najviše razdvajaju zadovoljne od nezadovoljnih putnika.
+
+Sve veze uočene u ovoj fazi posmatrane su pojedinačno, pa mogu biti posledica drugih promenljivih. U narednoj sekciji prelazimo na multivarijantnu analizu, u kojoj ćemo ispitati zajedničko delovanje više promenljivih na zadovoljstvo putnika.
