@@ -1623,3 +1623,113 @@ Skup podataka sada sadrži 129.880 opservacija i 32 promenljive, što znači da 
 U ovoj fazi kreirano je 10 novih promenljivih. Kašnjenja pri polasku i dolasku kategorisana su u četiri kategorije, a utvrđeno je da su ona gotovo potpuno linearno povezana (r = 0,959), pa je kreirana promenljiva `Delay_Difference` koja izdvaja ono što se desilo tokom leta. Starost i dužina leta svrstane su u kategorije (`Age_Group`, `Flight_Distance_Category`), pri čemu je kod starosti uočena U-veza sa nezadovoljstvom. Klasa leta predstavljena je i kao uređeni faktor. Vrednosti 0 u ocenama usluga tretirane su kao neocenjene usluge, pa je kreiran `Not_Rated_Count`, a 13 ocena grupisano je u tri zbirne ocene, od kojih komfor i usluge tokom leta najviše razdvajaju zadovoljne od nezadovoljnih putnika.
 
 Sve veze uočene u ovoj fazi posmatrane su pojedinačno, pa mogu biti posledica drugih promenljivih. U narednoj sekciji prelazimo na multivarijantnu analizu, u kojoj ćemo ispitati zajedničko delovanje više promenljivih na zadovoljstvo putnika.
+
+# Multivarijantna analiza
+
+U prethodnim fazama sprovedena je eksplorativna analiza pojedinačnih promenljivih (EDA) i izvršen inženjering obeležja (Feature Engineering). Iako su ti koraci pružili uvid u distribucije i pojedinačne uticaje, ponašanje promenljivih u realnim uslovima često zavisi od njihovog međusobnog delovanja. Cilj multivarijantne analize je da ispita zajednički uticaj više karakteristika na zadovoljstvo putnika, identifikuje korelacije i reši potencijalni problem multikolinearnosti pre izgradnje modela mašinskog učenja.
+
+## Korelaciona analiza numeričkih i ordinalnih promenljivih
+
+U okviru ovog koraka ispitaćemo linearne i monotonske veze između numeričkih i ordinalnih promenljivih u skupu podataka. S obzirom na to da ocene usluga predstavljaju ordinalne promenljive (na skali od 0 do 5), a pojedine numeričke promenljivosti (poput vremena kašnjenja) imaju izraženu asimetriju, za procenu povezanosti koristićemo **Spearmanov koeficijent korelacije**, koji je robustan na ekstremne vrednosti i ne zahteva normalnu raspodelu podataka.
+
+```{r}
+# 1. Priprema numeričke verzije ciljne promenljive radi korelacije (1 = Satisfied, 0 = Not Satisfied)
+data_corr <- data %>%
+  mutate(Satisfaction_Num = ifelse(Satisfaction == "Satisfied", 1, 0))
+
+# 2. Izbor relevantnih numeričkih i ordinalnih promenljivih za Spearmanovu matricu
+vars_for_corr <- data_corr %>%
+  select(
+    Satisfaction_Num, 
+    Age, 
+    Flight_Distance,
+    all_of(rating_columns),
+    Departure_Delay_in_Minutes, 
+    Arrival_Delay_in_Minutes, 
+    Delay_Difference
+  )
+
+# 3. Računanje Spearmanove matrice korelacije
+spearman_matrix <- cor(vars_for_corr, method = "spearman", use = "complete.obs")
+
+# 4. Prikaz korelacija sa ciljnom promenljivom (Satisfaction_Num)
+corr_with_sat <- spearman_matrix["Satisfaction_Num", ]
+sort(corr_with_sat, decreasing = TRUE)
+```
+
+Na osnovu izračunatih vrednosti Spearmanovog koeficijenta korelacije sa ciljnom promenljivom `Satisfaction_Num`, uočava se da najjaču pozitivnu povezanost sa zadovoljstvom putnika ostvaruju ocene usluga vezane za proces online prijave i komfor tokom leta. Najveću korelaciju beleži ocena online čekiranja (`Online_boarding`, $r \approx 0,55$), što ukazuje na ključni značaj digitalnih servisa za pozitivno iskustvo putnika. Slede ocene zabave na letu (`Inflight_entertainment`, $r \approx 0,40$) i udobnosti sedišta (`Seat_comfort`, $r \approx 0,36$). 
+
+Sa druge strane, kašnjenja (`Departure_Delay_in_Minutes` i `Arrival_Delay_in_Minutes`) pokazuju slabu negativnu korelaciju sa zadovoljstvom, pri čemu kašnjenje pri dolasku ima nešto izraženiji negativni uticaj ($r \approx -0,10$), dok promenljiva `Gate_location` i `Delay_Difference` imaju zanemarljivu linearnu/monotonsku povezanost sa krajnjim zadovoljstvom.
+
+U cilju detekcije potencijalne multikolinearnosti i analize strukture odnosa između ulaznih promenljivih, izdvojeni su parovi kod kojih je apsolutna vrednost Spearmanovog koeficijenta korelacije veća od 0,5 ($|r| > 0,5$).
+
+```{r}
+# Pronalaženje parova promenljivih sa visokom korelacijom (|r| > 0.5)
+cor_melted <- as.data.frame(as.table(spearman_matrix)) %>%
+  filter(Var1 != Var2) %>%
+  mutate(AbsFreq = abs(Freq)) %>%
+  arrange(desc(AbsFreq))
+
+# Filtriranje unikatnih parova sa |r| > 0.5
+high_corr_pairs <- cor_melted %>%
+  filter(AbsFreq > 0.5) %>%
+  distinct(AbsFreq, .keep_all = TRUE)
+
+head(high_corr_pairs, 10)
+```
+
+Izlaz funkcije potvrđuje prisustvo značajne povezanosti između određenih promenljivih. Najveću korelaciju među ulaznim karakteristikama ostvaruju kašnjenje pri dolasku i kašnjenje pri polasku ($r \approx 0,736$), što i statistički dokazuje visoku redundantnost i postojanje multikolinearnosti. Pored toga, uočava se da brojne ocene usluga (npr. povezanost između online rezervacije i wi-fi usluge sa $r \approx 0,71$, kao i međusobne korelacije ocena čistoće, zabave na letu, udobnosti sedišta i hrane) beleže vrednosti $|r| > 0,5$. Ovakav rezultat daje snažnu empirijsku potvrdu i opravdanje za kreiranje zbirnih ocena usluga u fazi inženjeringa obeležja, jer se time uspešno smanjuje dimenzionalnost prostora obeležja i izbegava narušavanje stabilnosti budućih modela usled kolinearnosti.
+
+## Provera zbirnih ocena i odluka o kašnjenjima
+
+Kako bismo verifikovali da li formiranje tri zbirne ocene (`Pre_Flight_Score`, `Comfort_Score`, `Service_Score`) ima smisla i da li adekvatno reprezentuju originalne unikatne ocene, izračunaćemo korelacije između zbirnih ocena i njihovih sastavnih delova. Takođe, na osnovu uočene multikolinearnosti između kašnjenja, donećemo odluku o izboru promenljivih koje će se koristiti u daljoj multivarijantnoj analizi.
+
+```{r}
+# 1. Provera korelacije zbirnih ocena sa originalnim ocenama koje ih čine
+validation_df <- data %>%
+  select(Pre_Flight_Score, Comfort_Score, Service_Score, all_of(rating_columns))
+
+val_corr <- cor(validation_df, method = "spearman", use = "complete.obs")
+
+# Prikaz korelacija zbirnih ocena sa originalnim
+val_corr[c("Pre_Flight_Score", "Comfort_Score", "Service_Score"), ]
+```
+
+Izlaz matrice korelacije između zbirnih ocena i pojedinačnih atributa pruža jasnu potvrdu ispravnosti provedenog grupisanja:
+- **`Pre_Flight_Score`** ostvaruje najjače korelacije sa varijablama `Ease_of_Online_booking` ($r \approx 0,69$) i `Departure_Arrival_time_convenient` ($r \approx 0,64$).
+- **`Comfort_Score`** pokazuje izuzetno visoku povezanost sa `Seat_comfort` ($r \approx 0,82$) i `Cleanliness` ($r \approx 0,81$).
+- **`Service_Score`** dominira u odnosu na `Inflight_entertainment` ($r \approx 0,84$) i `Food_and_drink` ($r \approx 0,68$).
+
+Ovi koeficijenti potvrđuju da su kreirane zbirne ocene izuzetno reprezentativne i da verno nose informaciju originalnih unikatnih ocena, čime je opravdano njihovo korišćenje u daljim modelima.
+
+Kao vizuelna potvrda dobijenih statističkih pokazatelja, u nastavku je prikazana matrica korelacija ključnih numeričkih obeležja i zbirnih ocena sa statusom zadovoljstva putnika.
+
+```{r}
+# Kreiranje data frame-a za vizuelizaciju matrica korelacija ključnih promenljivih
+library(reshape2)
+
+key_vars_corr <- data_corr %>%
+  select(Satisfaction_Num, Pre_Flight_Score, Comfort_Score, Service_Score, 
+         Departure_Delay_in_Minutes, Delay_Difference, Age, Flight_Distance)
+
+key_matrix <- cor(key_vars_corr, method = "spearman", use = "complete.obs")
+melted_cormat <- melt(key_matrix)
+
+ggplot(melted_cormat, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "#e74c3c", mid = "white", high = "#2ecc71", 
+                       midpoint = 0, limit = c(-1,1), name = "Spearman\nCorr") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+        axis.text.y = element_text(size = 8)) +
+  labs(
+    title = "Matrica korelacija ključnih obeležja",
+    x = "",
+    y = ""
+  )
+```
+
+Na prikazanom korelacionom dijagramu (heatmap) jasno se uočavaju tri ključne grupe odnosa:
+- **Zadovoljstvo i ocene usluga:** Promenljiva `Satisfaction_Num` pokazuje izrazito jaku pozitivnu povezanost (tamnozelena polja) sa zbirnim ocenama (`Service_Score`, `Comfort_Score` i `Pre_Flight_Score`), što potvrđuje da kvalitet usluga presudno utiče na krajnje zadovoljstvo putnika.
+- **Međusobna povezanost ocena:** Tri zbirne ocene usluga takođe beleže visoke međusobne korelacije, što ukazuje na to da putnici koji su zadovoljni jednim segmentom putovanja uglavnom visoko ocenjuju i ostale segmente.
+- **Kašnjenja i ostali faktori:** Metrike kašnjenja (`Departure_Delay_in_Minutes` i `Delay_Difference`) pokazuju slabu ili neutralnu povezanost sa ocenama i zadovoljstvom, dok promenljive poput starosti (`Age`) i dužine leta (`Flight_Distance`) ostaju uglavnom nezavisne od ocena usluga.
