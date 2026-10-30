@@ -1,10 +1,10 @@
 ---
 title: "Airline satisfaction data"
 output:
-  html_document: default
-  pdf_document: default
   word_document: 
     reference_docx: template.docx
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -1733,3 +1733,378 @@ Na prikazanom korelacionom dijagramu (heatmap) jasno se uočavaju tri ključne g
 - **Zadovoljstvo i ocene usluga:** Promenljiva `Satisfaction_Num` pokazuje izrazito jaku pozitivnu povezanost (tamnozelena polja) sa zbirnim ocenama (`Service_Score`, `Comfort_Score` i `Pre_Flight_Score`), što potvrđuje da kvalitet usluga presudno utiče na krajnje zadovoljstvo putnika.
 - **Međusobna povezanost ocena:** Tri zbirne ocene usluga takođe beleže visoke međusobne korelacije, što ukazuje na to da putnici koji su zadovoljni jednim segmentom putovanja uglavnom visoko ocenjuju i ostale segmente.
 - **Kašnjenja i ostali faktori:** Metrike kašnjenja (`Departure_Delay_in_Minutes` i `Delay_Difference`) pokazuju slabu ili neutralnu povezanost sa ocenama i zadovoljstvom, dok promenljive poput starosti (`Age`) i dužine leta (`Flight_Distance`) ostaju uglavnom nezavisne od ocena usluga.
+
+
+## Multivarijantna analiza kategorijskih promenljivih
+
+### Povezanost kategorijskih promenljivih - Cramerov V
+
+U prethodnoj bivarijantnoj analizi svaka kategorijska promenljiva posmatrana je zasebno. Takav pristup ne pokazuje da li su same kategorijske promenljive međusobno povezane. Na primer, poslovna putovanja mogu biti češća u poslovnoj klasi, dok se starosne grupe mogu razlikovati prema klasi leta.
+
+Zbog toga ćemo ispitati povezanost između kategorijskih promenljivih pomoću Cramerovog koeficijenta V. Ovaj koeficijent meri jačinu povezanosti između dve kategorijske promenljive i ima vrednosti od 0 do 1. Vrednost bliska nuli ukazuje na slabu povezanost, dok veće vrednosti ukazuju na izraženiju povezanost.
+
+Analiziraćemo sledeće promenljive:
+
+- `Gender`
+- `Customer_Type`
+- `Type_of_Travel`
+- `Class`
+- `Age_Group`
+- `Flight_Distance_Category`
+
+#### Matrica Cramerovog V
+
+Za svaki par kategorijskih promenljivih formiraćemo tabelu kontingencije i izračunati Cramerov koeficijent V. Na ovaj način možemo utvrditi koje promenljive nose sličnu informaciju i na koje odnose treba posebno obratiti pažnju u nastavku analize.
+
+```{r}
+categorical_vars <- data %>%
+  select(
+    Gender,
+    Customer_Type,
+    Type_of_Travel,
+    Class,
+    Age_Group,
+    Flight_Distance_Category
+  )
+
+cramers_v <- function(x, y) {
+  complete_rows <- complete.cases(x, y)
+  contingency_table <- table(x[complete_rows], y[complete_rows])
+
+  chi_test <- suppressWarnings(chisq.test(contingency_table, correct = FALSE))
+  n <- sum(contingency_table)
+
+  sqrt(
+    as.numeric(chi_test$statistic) /
+      (n * min(nrow(contingency_table) - 1,
+               ncol(contingency_table) - 1))
+  )
+}
+
+cramers_matrix <- matrix(
+  NA_real_,
+  nrow = ncol(categorical_vars),
+  ncol = ncol(categorical_vars),
+  dimnames = list(names(categorical_vars), names(categorical_vars))
+)
+
+for (i in seq_len(ncol(categorical_vars))) {
+  for (j in seq_len(ncol(categorical_vars))) {
+    if (i == j) {
+      cramers_matrix[i, j] <- 1
+    } else {
+      cramers_matrix[i, j] <- cramers_v(
+        categorical_vars[[i]],
+        categorical_vars[[j]]
+      )
+    }
+  }
+}
+
+round(cramers_matrix, 3)
+```
+
+
+
+Dobijena matrica prikazuje jačinu povezanosti između svih parova kategorijskih promenljivih. Dijagonala matrice ima vrednost 1 zato što je svaka promenljiva potpuno povezana sama sa sobom. U daljoj interpretaciji posmatramo samo vrednosti van dijagonale.
+
+Najizraženija povezanost uočava se između promenljivih `Type_of_Travel` i `Class` (V = 0,554), što ukazuje da su svrha putovanja i klasa leta povezane. Umerena povezanost postoji između `Customer_Type` i `Age_Group` (V = 0,336), kao i između `Class` i `Flight_Distance_Category` (V = 0,334). Povezanosti promenljive `Gender` sa ostalim kategorijskim promenljivama su veoma slabe.
+
+Ove rezultate treba uzeti u obzir pri tumačenju kombinovanih analiza, jer neke promenljive nisu međusobno nezavisne. Cramerov V opisuje jačinu povezanosti, ali ne pokazuje uzročnost.
+
+Pri tumačenju treba razlikovati statističku povezanost od uzročno-posledične veze. Visok Cramerov V pokazuje da se kategorije dve promenljive često pojavljuju zajedno, ali ne dokazuje da jedna promenljiva uzrokuje drugu.
+
+
+### Zadovoljstvo prema kombinaciji klase i svrhe putovanja
+
+
+U prethodnoj analizi posmatrali smo klasu leta i svrhu putovanja pojedinačno. Međutim, moguće je da zadovoljstvo putnika zavisi od njihove kombinacije. Na primer, poslovna klasa može imati drugačiju raspodelu zadovoljstva kod poslovnih i kod ličnih putovanja.
+
+Zbog toga ćemo analizirati procenat zadovoljnih i nezadovoljnih putnika za svaku kombinaciju promenljivih `Class` i `Type_of_Travel`.
+
+```{r}
+class_travel_satisfaction <- data %>%
+  count(Class, Type_of_Travel, Satisfaction, name = "Broj") %>%
+  group_by(Class, Type_of_Travel) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+class_travel_satisfaction
+```
+
+```{r}
+ggplot(
+  class_travel_satisfaction,
+  aes(
+    x = Class,
+    y = Procenat,
+    fill = Satisfaction
+  )
+) +
+  geom_col(position = "fill") +
+  facet_wrap(~ Type_of_Travel) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo prema klasi i svrsi putovanja",
+    x = "Klasa leta",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+```{r}
+class_travel_table <- table(
+  data$Class,
+  data$Type_of_Travel,
+  data$Satisfaction
+)
+
+class_travel_chisq <- chisq.test(
+  ftable(class_travel_table),
+  correct = FALSE
+)
+
+class_travel_chisq
+```
+
+
+
+Rezultati pokazuju da se zadovoljstvo putnika značajno razlikuje u zavisnosti od kombinacije klase leta i svrhe putovanja. Kod poslovnih putovanja najveći procenat zadovoljnih putnika zabeležen je u poslovnoj klasi, gde je 72,0% putnika zadovoljno. U ekonomskoj klasi zadovoljnih je 30,0%, dok je u klasi Eco Plus zadovoljnih 39,3%.
+
+Kod ličnih putovanja procenat zadovoljnih putnika je znatno niži u svim klasama. U poslovnoj klasi zadovoljno je 11,7% putnika, u ekonomskoj 10,2%, a u klasi Eco Plus 8,74%. To pokazuje da sama klasa leta ne objašnjava u potpunosti zadovoljstvo, već da važnu ulogu ima i svrha putovanja.
+
+Pearsonov hi-kvadrat test pokazuje statistički značajnu povezanost između klase leta, svrhe putovanja i zadovoljstva putnika, χ²(5) = 39861, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti ovih kategorijskih promenljivih.
+
+Ipak, zbog veoma velikog broja opservacija, statistička značajnost ne znači nužno da su sve razlike praktično podjednako važne. Takođe, ovaj test ne dokazuje uzročno-posledičnu vezu, već samo pokazuje da su raspodele zadovoljstva povezane sa kombinacijom klase leta i svrhe putovanja.
+
+### Zadovoljstvo prema kombinaciji tipa korisnika i svrhe putovanja
+
+
+U prethodnim analizama `Customer_Type` i `Type_of_Travel` posmatrani su odvojeno. Međutim, moguće je da se zadovoljstvo razlikuje prema njihovoj kombinaciji. Na primer, lojalni korisnici mogu imati drugačiji nivo zadovoljstva kada putuju poslovno u odnosu na putovanje iz ličnih razloga.
+
+Zbog toga ćemo analizirati procenat zadovoljnih i nezadovoljnih putnika za svaku kombinaciju tipa korisnika i svrhe putovanja.
+
+```{r}
+customer_travel_satisfaction <- data %>%
+  count(Customer_Type, Type_of_Travel, Satisfaction, name = "Broj") %>%
+  group_by(Customer_Type, Type_of_Travel) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+customer_travel_satisfaction
+```
+
+```{r}
+ggplot(
+  customer_travel_satisfaction,
+  aes(
+    x = Customer_Type,
+    y = Procenat,
+    fill = Satisfaction
+  )
+) +
+  geom_col(position = "fill") +
+  facet_wrap(~ Type_of_Travel) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo prema tipu korisnika i svrsi putovanja",
+    x = "Tip korisnika",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+```{r}
+customer_travel_table <- table(
+  data$Customer_Type,
+  data$Type_of_Travel,
+  data$Satisfaction
+)
+
+customer_travel_chisq <- chisq.test(
+  ftable(customer_travel_table),
+  correct = FALSE
+)
+
+customer_travel_chisq
+```
+
+
+Rezultati pokazuju da se zadovoljstvo putnika razlikuje prema kombinaciji tipa korisnika i svrhe putovanja. Kod poslovnih putovanja, lojalni korisnici imaju znatno veći procenat zadovoljnih putnika — 70,6%, u poređenju sa 24,0% kod dislojalnih korisnika.
+
+Kod ličnih putovanja procenat zadovoljnih putnika je nizak kod obe grupe. Kod dislojalnih korisnika iznosi 15,9%, dok kod lojalnih korisnika iznosi 10,1%. Ovaj rezultat pokazuje da lojalnost korisnika nije dovoljna da sama po sebi obezbedi zadovoljstvo, jer svrha putovanja ima važnu ulogu u posmatranom skupu podataka.
+
+Pearsonov hi-kvadrat test pokazuje statistički značajnu povezanost između kombinovane kategorijske promenljive i zadovoljstva putnika, χ²(3) = 41634, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti.
+
+Najizraženija razlika uočava se kod poslovnih putovanja, gde se lojalni korisnici znatno češće izjašnjavaju kao zadovoljni. Kod ličnih putovanja obe grupe imaju visok procenat nezadovoljnih putnika. Međutim, grupu disloyal Customer – Personal Travel čini svega 201 putnik, zbog čega procenat od 15,9% treba tumačiti sa oprezom.
+
+Test pokazuje da je zadovoljstvo povezano sa kombinacijom tipa korisnika i svrhe putovanja, ali sam po sebi ne dokazuje uzročno-posledičnu vezu.
+
+### Zadovoljstvo prema kombinaciji starosne grupe i klase leta
+
+U prethodnoj analizi uočeno je da se procenat nezadovoljnih putnika razlikuje između starosnih grupa, dok se zadovoljstvo značajno razlikuje i između klasa leta. Zbog toga je potrebno ispitati da li se obrazac starosti održava unutar različitih klasa.
+
+Ovom analizom proverićemo da li starosna grupa ima sličnu povezanost sa zadovoljstvom u svim klasama leta ili se uočene razlike mogu objasniti razlikama u klasi putovanja.
+
+```{r}
+age_class_satisfaction <- data %>%
+  count(Age_Group, Class, Satisfaction, name = "Broj") %>%
+  group_by(Age_Group, Class) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+age_class_satisfaction
+```
+
+```{r}
+ggplot(
+  age_class_satisfaction,
+  aes(
+    x = Age_Group,
+    y = Procenat,
+    fill = Satisfaction
+  )
+) +
+  geom_col(position = "fill") +
+  facet_wrap(~ Class) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo prema starosnoj grupi i klasi leta",
+    x = "Starosna grupa",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+```{r}
+age_class_table <- table(
+  data$Age_Group,
+  data$Class,
+  data$Satisfaction
+)
+
+age_class_chisq <- chisq.test(
+  ftable(age_class_table),
+  correct = FALSE
+)
+
+age_class_chisq
+```
+
+
+
+Rezultati pokazuju da se zadovoljstvo putnika razlikuje prema kombinaciji starosne grupe i klase leta. U svim starosnim grupama poslovna klasa ima veći procenat zadovoljnih putnika u odnosu na Eco i Eco Plus klase.
+
+U poslovnoj klasi najniži procenat zadovoljnih putnika uočava se kod najmlađe grupe, dok se najveći procenat zadovoljnih javlja kod srednjih i starijih radno aktivnih grupa. Kod Eco klase procenat zadovoljnih putnika je znatno niži u svim starosnim grupama. Sličan obrazac uočava se i kod klase Eco Plus, mada su razlike između starosnih grupa izraženije.
+
+Ovi rezultati ukazuju da se obrazac povezanosti starosti i zadovoljstva ne može posmatrati nezavisno od klase leta. Klasa leta je povezana sa nivoom zadovoljstva unutar svih starosnih grupa, dok se razlike između starosnih grupa menjaju u zavisnosti od klase.
+
+Pearsonov hi-kvadrat test pokazuje statistički značajnu povezanost između kombinacije starosne grupe i klase leta i zadovoljstva putnika, χ²(14) = 36035, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti.
+
+Ipak, test ne dokazuje uzročno-posledičnu vezu niti samostalno potvrđuje formalnu interakciju između starosne grupe i klase. On pokazuje da se raspodela zadovoljstva značajno razlikuje između posmatranih kombinacija kategorija.
+
+### Zadovoljstvo prema kombinaciji dužine leta i klase
+
+
+
+U prethodnoj analizi uočeno je da se zadovoljstvo razlikuje između kategorija dužine leta, pri čemu su putnici na dugim letovima u proseku zadovoljniji. Takođe je utvrđeno da se zadovoljstvo značajno razlikuje između klasa leta.
+
+Zbog toga ćemo proveriti da li se razlike u zadovoljstvu između kratkih, srednjih i dugih letova održavaju unutar svake klase. Na taj način možemo ispitati da li je uočeno veće zadovoljstvo na dugim letovima povezano sa samom dužinom leta ili je delimično posledica različite zastupljenosti klasa leta.
+
+```{r}
+distance_class_satisfaction <- data %>%
+  count(Flight_Distance_Category, Class, Satisfaction, name = "Broj") %>%
+  group_by(Flight_Distance_Category, Class) %>%
+  mutate(Procenat = round(Broj / sum(Broj) * 100, 2)) %>%
+  ungroup()
+
+distance_class_satisfaction
+```
+
+```{r}
+ggplot(
+  distance_class_satisfaction,
+  aes(
+    x = Flight_Distance_Category,
+    y = Procenat,
+    fill = Satisfaction
+  )
+) +
+  geom_col(position = "fill") +
+  facet_wrap(~ Class) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_manual(
+    values = c(
+      "Satisfied" = "#2ecc71",
+      "Not Satisfied" = "#e74c3c"
+    )
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Zadovoljstvo prema dužini leta i klasi",
+    x = "Kategorija dužine leta",
+    y = "Procenat putnika",
+    fill = "Status zadovoljstva"
+  )
+```
+
+```{r}
+distance_class_table <- table(
+  data$Flight_Distance_Category,
+  data$Class,
+  data$Satisfaction
+)
+
+distance_class_chisq <- chisq.test(
+  ftable(distance_class_table),
+  correct = FALSE
+)
+
+distance_class_chisq
+```
+
+
+Rezultati pokazuju da se odnos između dužine leta i zadovoljstva razlikuje u zavisnosti od klase leta. U poslovnoj klasi procenat zadovoljnih putnika raste sa dužinom leta: 59,2% kod kratkih, 64,3% kod srednjih i 76,0% kod dugih letova.
+
+Kod ekonomske klase uočava se suprotan obrazac. Procenat zadovoljnih iznosi 20,9% kod kratkih, 17,8% kod srednjih i 14,8% kod dugih letova. Sličan obrazac postoji i u klasi Eco Plus, gde procenat zadovoljnih opada sa 27,2% kod kratkih na 18,1% kod dugih letova.
+
+Ovi rezultati pokazuju da se veće zadovoljstvo kod dugih letova, uočeno u bivarijantnoj analizi, ne održava jednako u svim klasama. Ono je naročito izraženo u poslovnoj klasi, dok se u ekonomskim klasama procenat zadovoljnih putnika smanjuje sa dužinom leta. Zbog toga ukupna povezanost dužine leta sa zadovoljstvom može biti delimično posledica različite strukture putnika po klasama leta.
+
+Pearsonov hi-kvadrat test pokazuje statistički značajnu povezanost između kombinacije kategorije dužine leta i klase i zadovoljstva putnika, χ²(8) = 34315, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti.
+
+Dobijeni rezultat ne dokazuje uzročno-posledičnu vezu niti samostalno potvrđuje formalnu interakciju između dužine leta i klase. Takođe treba imati u vidu da je klasa Eco Plus manje zastupljena, pa rezultate za ovu grupu treba tumačiti opreznije.
+
+
+## Zaključak analize kategorijskih kombinacija
+
+U ovoj analizi ispitano je da li se zadovoljstvo putnika razlikuje prema kombinacijama važnih kategorijskih promenljivih. Posmatrane su kombinacije klase i svrhe putovanja, tipa korisnika i svrhe putovanja, starosne grupe i klase, kao i kategorije dužine leta i klase.
+
+Rezultati pokazuju da se zadovoljstvo ne može potpuno objasniti posmatranjem samo jedne promenljive. Klasa leta i svrha putovanja imaju posebno izražen značaj, ali se njihov odnos sa zadovoljstvom menja u zavisnosti od druge karakteristike putnika ili leta.
+
+Kod poslovnih putovanja poslovna klasa ima najveći procenat zadovoljnih putnika, dok su kod ličnih putovanja procenti zadovoljnih niski u svim klasama. Lojalni korisnici su znatno zadovoljniji od dislojalnih kod poslovnih putovanja, dok je kod ličnih putovanja zadovoljstvo nisko kod obe grupe. Analiza starosnih grupa pokazuje da razlike između starosti nisu iste u svim klasama leta. Takođe, veće zadovoljstvo kod dugih letova uglavnom se održava u poslovnoj klasi, ali ne i u ekonomskim klasama.
+
+Svi primenjeni hi-kvadrat testovi pokazali su statistički značajne povezanosti, uz nivo značajnosti p < 0,001. Međutim, zbog velikog broja opservacija statistička značajnost ne znači nužno veliku praktičnu važnost. Rezultati ukazuju na povezanost između posmatranih kombinacija kategorija i zadovoljstva, ali ne dokazuju uzročno-posledične veze.
+
+Ovi nalazi predstavljaju osnovu za izbor promenljivih u daljoj multivarijantnoj analizi i izgradnji modela predikcije.
+
