@@ -2108,3 +2108,300 @@ Svi primenjeni hi-kvadrat testovi pokazali su statistički značajne povezanosti
 
 Ovi nalazi predstavljaju osnovu za izbor promenljivih u daljoj multivarijantnoj analizi i izgradnji modela predikcije.
 
+## Provera strukture ocena usluga (PCA)
+
+Dosadašnje grupisanje 13 ocena u tri zbirne ocene (`Pre_Flight_Score`, `Comfort_Score`, `Service_Score`) predstavlja procenu autora. Da bismo proverili da li se ocene u podacima zaista grupišu na taj način, primenjujemo analizu glavnih komponenti (PCA). PCA pronalazi nove, međusobno nekorelisane promenljive (glavne komponente) koje redom objašnjavaju najveći deo varijanse polaznih promenljivih, dok koeficijenti (loadings) pokazuju koje se ocene zajedno kreću.
+
+PCA ne dozvoljava nedostajuće vrednosti, a vrednost 0 označava neocenjenu uslugu. Zbog toga analizu sprovodimo nad putnicima koji su ocenili svih 13 usluga (`Not_Rated_Count == 0`), što čini 92,06% uzorka. Promenljive se pre analize standardizuju.
+
+```{r}
+pca_data <- data %>%
+  filter(Not_Rated_Count == 0) %>%
+  select(all_of(rating_columns))
+
+nrow(pca_data)
+
+pca_result <- prcomp(pca_data, center = TRUE, scale. = TRUE)
+
+# Udeo objašnjene varijanse (prvih 6 komponenti)
+round(summary(pca_result)$importance[, 1:6], 3)
+```
+Analiza je sprovedena nad 119.567 putnika koji su ocenili svih 13 usluga. Prve tri glavne komponente zajedno objašnjavaju 60,9% ukupne varijanse (28,3%, 19,0% i 13,6%), a prvih šest komponenti 80,9%. Varijansa nije koncentrisana u jednoj komponenti, što pokazuje da ocene usluga ne mere jedan opšti utisak o usluzi, već nekoliko relativno odvojenih aspekata putovanja. Prema Kajzerovom kriterijumu (standardna devijacija veća od 1) zadržavaju se četiri komponente, pri čemu je četvrta tek na samoj granici (1,003).
+```{r}
+# Scree plot
+pca_var_df <- data.frame(
+  Komponenta = seq_along(pca_result$sdev),
+  Udeo = pca_result$sdev^2 / sum(pca_result$sdev^2)
+)
+
+ggplot(pca_var_df, aes(x = Komponenta, y = Udeo)) +
+  geom_col(fill = "#3498db", alpha = 0.8) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = pca_var_df$Komponenta) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+  labs(
+    title = "Udeo objašnjene varijanse po glavnim komponentama",
+    x = "Glavna komponenta",
+    y = "Udeo objašnjene varijanse"
+  )
+```
+Scree dijagram pokazuje da je najveći pad udela objašnjene varijanse između treće i četvrte komponente (sa oko 14% na oko 8%), nakon čega pad postaje blag. Lom se nalazi na četvrtoj komponenti, što ukazuje na to da se struktura ocena može opisati sa tri do četiri glavne komponente.
+```{r}
+# Koeficijenti (loadings) prvih četiri komponente
+round(pca_result$rotation[, 1:4], 2)
+```
+Predznak koeficijenata u PCA je proizvoljan, pa se tumače njihove apsolutne vrednosti i relativni odnos predznaka unutar iste komponente. Prva komponenta (28,3%) ima koeficijente istog predznaka kod svih ocena, što znači da opisuje opštu sklonost putnika da usluge ocenjuje više ili niže. Najveći doprinos imaju zabava na letu, čistoća, udobnost sedišta, hrana i piće i online ukrcavanje, dok je doprinos lokacije gejta i pogodnosti vremena polaska i dolaska najmanji.
+
+Druga komponenta (19,0%) izdvaja ocene vezane za organizaciju putovanja: online rezervaciju (0,52), lokaciju gejta (0,46), pogodnost vremena polaska i dolaska (0,46) i WiFi (0,41). Uočava se da se WiFi grupiše sa rezervacijom, a ne sa ostalim uslugama tokom leta. Treća komponenta (13,6%) suprotstavlja uslugu osoblja, rukovanje prtljagom i prostor za noge (koeficijenti oko -0,4 do -0,5) sa hranom i pićem, udobnošću sedišta i čistoćom (koeficijenti oko 0,3). Četvrta komponenta (7,7%) izdvaja online ukrcavanje (0,61) i prijavu na let (0,45), odnosno digitalne korake pre leta.
+
+Ovi rezultati samo delimično potvrđuju početno grupisanje ocena u tri zbirne ocene, jer se ocene prema PCA grupišu drugačije od pretpostavljenog.
+
+### Rotirana struktura komponenti (varimax)
+
+Koeficijenti glavnih komponenti često se teško tumače jer se jedna ocena pojavljuje u više komponenti. Varimax rotacija preraspoređuje koeficijente tako da svaka ocena što više pripada samo jednoj komponenti, što olakšava prepoznavanje grupa srodnih usluga. Rotaciju primenjujemo na prve četiri komponente, jer se na njima nalazi lom scree dijagrama.
+
+```{r}
+loadings_scaled <- pca_result$rotation[, 1:4] %*% diag(pca_result$sdev[1:4])
+colnames(loadings_scaled) <- paste0("RC", 1:4)
+
+rotated <- varimax(loadings_scaled)
+round(unclass(rotated$loadings), 2)
+```
+Nakon varimax rotacije struktura je znatno jasnija: svaka ocena ima jedan dominantan koeficijent (u rasponu od 0,55 do 0,87 po apsolutnoj vrednosti), dok su ostali uglavnom mali. Negativan predznak kod prve i treće komponente je proizvoljan i ne utiče na tumačenje.
+
+Prva komponenta (RC1) obuhvata čistoću (0,87), hranu i piće (0,85), udobnost sedišta (0,81) i zabavu na letu (0,80), odnosno doživljaj u kabini. Druga komponenta (RC2) obuhvata online rezervaciju (0,84), lokaciju gejta (0,81), pogodnost vremena polaska i dolaska (0,77) i WiFi (0,72), odnosno organizaciju i pristupačnost putovanja. Treća komponenta (RC3) obuhvata rukovanje prtljagom (0,83), uslugu osoblja (0,80) i prostor za noge (0,66), a četvrta (RC4) online ukrcavanje (0,80) i prijavu na let (0,55), odnosno digitalne korake pre leta. Pojedine ocene imaju i sekundarni koeficijent (npr. WiFi 0,40 na RC4 i zabava na letu 0,44 na RC3), pa granice između grupa nisu potpuno oštre.
+
+U poređenju sa početnim grupisanjem, `Pre_Flight_Score` objedinjuje ocene koje se prema PCA nalaze u dve različite komponente (RC2 i RC4), `Comfort_Score` razdvaja udobnost sedišta i čistoću (RC1) od prostora za noge (RC3), a ocene u `Service_Score` raspoređene su na tri komponente. Početno grupisanje je, dakle, samo delimično potvrđeno.
+
+### Zbirne ocene prema strukturi glavnih komponenti
+
+Na osnovu rotirane strukture komponenti formiramo četiri nove zbirne ocene, koje zamenjuju prvobitno, intuitivno grupisanje iz dela o inženjeringu obeležja (`Pre_Flight_Score`, `Comfort_Score` i `Service_Score`). Od ovog trenutka u analizi koristimo nove ocene, a prvobitne ostaju u skupu podataka samo kao dokumentacija ranijeg koraka i ne koriste se zajedno sa novim ocenama.
+
+Ocene grupišemo na sledeći način:
+
+- **Cabin_Score** (doživljaj u kabini): čistoća, hrana i piće, udobnost sedišta, zabava na letu,
+- **Booking_Score** (organizacija putovanja): online rezervacija, lokacija gejta, pogodnost vremena polaska i dolaska, WiFi,
+- **Handling_Score** (osoblje i rukovanje): rukovanje prtljagom, usluga osoblja, prostor za noge,
+- **Digital_Score** (digitalni koraci pre leta): online ukrcavanje, prijava na let.
+
+Kao i ranije, vrednost 0 (neocenjena usluga) izostavljamo iz proseka. Grupe su određene na osnovu PCA, koja ukazuje na strukturu, ali ne dokazuje da su grupe jedine ispravne. Pojedine ocene imaju i sekundarna opterećenja, pa granice između grupa nisu potpuno oštre.
+
+```{r}
+cabin_cols    <- c("Cleanliness", "Food_and_drink", "Seat_comfort", "Inflight_entertainment")
+booking_cols  <- c("Ease_of_Online_booking", "Gate_location",
+                   "Departure_Arrival_time_convenient", "Inflight_wifi_service")
+handling_cols <- c("Baggage_handling", "On_board_service", "Leg_room_service")
+digital_cols  <- c("Online_boarding", "Checkin_service")
+
+data <- data %>%
+  mutate(
+    Cabin_Score    = row_mean_rated(data, cabin_cols),
+    Booking_Score  = row_mean_rated(data, booking_cols),
+    Handling_Score = row_mean_rated(data, handling_cols),
+    Digital_Score  = row_mean_rated(data, digital_cols)
+  )
+
+summary(data %>% select(Cabin_Score, Booking_Score, Handling_Score, Digital_Score))
+```
+Sve četiri zbirne ocene kreću se u rasponu od 1 do 5, što potvrđuje da su neocenjene usluge (vrednost 0) izostavljene iz proseka. U zbirnim ocenama nema nedostajućih vrednosti, što znači da je svaki putnik ocenio bar jednu uslugu u svakoj od četiri grupe, uključujući i `Digital_Score`, koja se sastoji od samo dve usluge. Najviše je ocenjeno rukovanje i osoblje (prosek 3,46), zatim doživljaj u kabini (3,32) i digitalni koraci pre leta (3,32), a najniže organizacija putovanja (prosek 2,97, medijana 3,0). Medijane su bliske prosecima, što ukazuje na relativno simetrične raspodele.
+
+Da bismo ispitali da li se nove zbirne ocene razlikuju između zadovoljnih i nezadovoljnih putnika, prikazaćemo uporedne boxplot dijagrame, a zatim i prosečne ocene po grupama zadovoljstva.
+
+```{r}
+data %>%
+  select(Satisfaction, Cabin_Score, Booking_Score, Handling_Score, Digital_Score) %>%
+  pivot_longer(-Satisfaction, names_to = "Grupa", values_to = "Ocena") %>%
+  ggplot(aes(x = Satisfaction, y = Ocena, fill = Satisfaction)) +
+  geom_boxplot(alpha = 0.7, color = "black") +
+  facet_wrap(~ Grupa, ncol = 2) +
+  scale_fill_manual(
+    values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Nove zbirne ocene usluga prema zadovoljstvu",
+    x = "Status zadovoljstva",
+    y = "Prosečna ocena (1-5)"
+  ) +
+  theme(legend.position = "none")
+```
+
+```{r}
+data %>%
+  group_by(Satisfaction) %>%
+  summarise(
+    Cabin    = round(mean(Cabin_Score), 2),
+    Booking  = round(mean(Booking_Score), 2),
+    Handling = round(mean(Handling_Score), 2),
+    Digital  = round(mean(Digital_Score), 2)
+  )
+```
+Sve četiri zbirne ocene su u proseku više kod zadovoljnih nego kod nezadovoljnih putnika, ali se razlike među grupama jasno razlikuju. Najveća razlika uočava se kod digitalnih koraka pre leta (`Digital_Score`: 3,89 naspram 2,88, razlika 1,01), zatim kod doživljaja u kabini (`Cabin_Score`: 3,80 naspram 2,96, razlika 0,84) i osoblja i rukovanja (`Handling_Score`: 3,88 naspram 3,13, razlika 0,75). Kod ove tri grupe medijana zadovoljnih putnika iznosi oko 4, a nezadovoljnih oko 3. Kod organizacije putovanja (`Booking_Score`) razlika je najmanja (3,18 naspram 2,81, razlika 0,37), medijane su blizu (oko 3,25 i 2,75), a kutije se u velikoj meri preklapaju, pa ova grupa najslabije razdvaja dve kategorije putnika. Kod nezadovoljnih putnika `Cabin_Score` ima najširi interkvartilni opseg (od 2 do 4), dok je kod zadovoljnih sužen oko visokih ocena, uz pojedinačne niske vrednosti ispod kutije.
+
+Ovi rezultati su u skladu sa ranijim nalazom da priprema pre leta slabije razdvaja zadovoljne od nezadovoljnih. Treba imati u vidu da `Digital_Score` čine samo dve ocene, pa je osetljiviji na pojedinačne vrednosti od ostalih grupa. Razlike u prosecima su povezanost, a ne dokaz uticaja, i mogu delimično biti posledica klase leta i svrhe putovanja, što proveravamo u narednom koraku.
+
+### Zbirne ocene prema klasi i svrsi putovanja
+
+U prethodnom koraku uočili smo da se zbirne ocene razlikuju između zadovoljnih i nezadovoljnih putnika. Međutim, klasa leta i svrha putovanja snažno su povezane sa zadovoljstvom (V = 0,503 i V = 0,450), pa je moguće da deo ove razlike potiče upravo od njih. Zbog toga prvo prikazujemo prosečne ocene za svaku kombinaciju klase i svrhe putovanja, a zatim proveravamo da li se razlika između zadovoljnih i nezadovoljnih putnika održava unutar svake kombinacije.
+
+```{r}
+data %>%
+  group_by(Class, Type_of_Travel) %>%
+  summarise(
+    Broj     = n(),
+    Cabin    = round(mean(Cabin_Score), 2),
+    Booking  = round(mean(Booking_Score), 2),
+    Handling = round(mean(Handling_Score), 2),
+    Digital  = round(mean(Digital_Score), 2),
+    .groups = "drop"
+  )
+```
+Prosečne ocene razlikuju se između segmenata uglavnom zbog jedne kombinacije: putnici u poslovnoj klasi na poslovnim putovanjima (59.487 putnika) daju najviše ocene za kabinu (3,57), osoblje i rukovanje (3,75) i digitalne korake (3,66). U ostalim segmentima te ocene su niže i međusobno slične (kabina oko 3,1 do 3,2). Poslovna klasa na ličnim putovanjima ima ocenu kabine (3,21) gotovo istu kao Eco klasa (3,10), što pokazuje da viša ocena kabine nije svojstvo poslovne klase same po sebi. Ocena organizacije putovanja (`Booking`) gotovo se ne menja između segmenata (od 2,93 do 3,00). U ekonomskim klasama putnici na ličnim putovanjima ocenjuju osoblje i rukovanje (3,32 do 3,33) i digitalne korake (oko 3,1) više nego na poslovnim (3,00 do 3,08 i oko 2,9).
+
+```{r, fig.width = 10, fig.height = 6}
+data %>%
+  select(Class, Type_of_Travel, Satisfaction,
+         Cabin_Score, Booking_Score, Handling_Score, Digital_Score) %>%
+  pivot_longer(ends_with("_Score"), names_to = "Grupa", values_to = "Ocena") %>%
+  group_by(Class, Type_of_Travel, Satisfaction, Grupa) %>%
+  summarise(Prosek = mean(Ocena), .groups = "drop") %>%
+  ggplot(aes(x = Grupa, y = Prosek, fill = Satisfaction)) +
+  geom_col(position = "dodge") +
+  facet_grid(Type_of_Travel ~ Class) +
+  scale_fill_manual(
+    values = c("Satisfied" = "#2ecc71", "Not Satisfied" = "#e74c3c")
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Prosečne zbirne ocene prema klasi, svrsi putovanja i zadovoljstvu",
+    x = NULL,
+    y = "Prosečna ocena (1-5)",
+    fill = "Status zadovoljstva"
+  )
+```
+Na poslovnim putovanjima (gornji red) zadovoljni putnici u sve tri klase imaju više ocene u svim grupama. Razlike su najveće kod kabine, digitalnih koraka i osoblja i rukovanja (u poslovnoj klasi oko 0,8 do 1,2 poena), a najmanje kod organizacije putovanja. Na ličnim putovanjima (donji red) slika je drugačija: razlika kod kabine i osoblja i rukovanja gotovo nestaje (u klasi Eco Plus ocena kabine je čak neznatno viša kod nezadovoljnih), dok se razlika zadržava kod organizacije putovanja (oko 0,9 poena) i digitalnih koraka (oko 0,4 do 0,6 poena).
+
+Prema tome, usluge povezane sa zadovoljstvom zavise od svrhe putovanja: kod poslovnih putnika to su kabina, digitalni koraci i osoblje, a kod putnika na ličnim putovanjima organizacija putovanja i digitalni koraci. To može objasniti zašto je organizacija putovanja u ukupnom poređenju najslabije razdvajala zadovoljne od nezadovoljnih, jer se njena veza sa zadovoljstvom u ukupnom prosečnom poređenju delimično gubi. Grupu poslovne klase na ličnim putovanjima čini samo 2.673 putnika, pa je treba tumačiti opreznije.
+
+## Multikolinearnost: probni logistički model i VIF
+
+Pre izgradnje konačnih modela proveravamo da li među kandidatima za ulazne promenljive postoji multikolinearnost, odnosno da li neke promenljive nose gotovo istu informaciju. Za to koristimo probni logistički model sa svim kandidatima i faktor povećanja varijanse (VIF). VIF pokazuje koliko je varijansa procene koeficijenta povećana zbog povezanosti date promenljive sa ostalim promenljivama. Prema uobičajenoj preporuci, vrednosti iznad 5 ukazuju na umerenu, a iznad 10 na ozbiljnu multikolinearnost. Kod kategorijskih promenljiva sa više od dva nivoa koristi se prilagođena mera, GVIF^(1/(2·Df)), čiji se kvadrat poredi sa istim granicama.
+
+U model ulaze starost i dužina leta u originalnom, numeričkom obliku (njihove kategorije su izvedene iz njih), kašnjenje pri polasku i kašnjenje pri dolasku, kao i četiri nove zbirne ocene. Promenljiva `Delay_Difference` ne ulazi u model jer je tačna linearna kombinacija dva kašnjenja, pa bi izazvala savršenu multikolinearnost. Prvobitne tri zbirne ocene takođe ne ulaze, jer se računaju iz istih ocena kao nove. Ciljna promenljiva se kodira kao 1 za zadovoljne putnike, da bi se pozitivan koeficijent tumačio kao veća šansa za zadovoljstvo.
+
+```{r}
+model_data <- data %>%
+  mutate(Satisfied_Num = as.integer(Satisfaction == "Satisfied"))
+
+full_model <- glm(
+  Satisfied_Num ~ Gender + Customer_Type + Type_of_Travel + Class +
+    Age + Flight_Distance +
+    Departure_Delay_in_Minutes + Arrival_Delay_in_Minutes +
+    Cabin_Score + Booking_Score + Handling_Score + Digital_Score,
+  data = model_data,
+  family = binomial
+)
+
+x_matrix <- model.matrix(full_model)[, -1]   # matrica prediktora bez konstantnog člana
+
+vif_values <- diag(solve(cor(x_matrix)))
+round(sort(vif_values, decreasing = TRUE), 2)
+```
+### Rešavanje multikolinearnosti kašnjenja
+
+Pošto kašnjenja pri polasku i dolasku ne smeju ući u model zajedno, poredimo tri načina da se informacija o kašnjenju predstavi: (1) kašnjenje pri polasku zajedno sa razlikom `Delay_Difference`, (2) samo kašnjenje pri polasku i (3) samo kašnjenje pri dolasku. Prvi način sadrži istu informaciju kao polazni model sa oba kašnjenja, jer je kašnjenje pri dolasku zbir kašnjenja pri polasku i razlike, ali bez multikolinearnosti. Modele poredimo Akaikeovim informacionim kriterijumom (AIC), kod koga je manja vrednost bolja, a razlika veća od oko 10 uobičajeno se smatra jasnom.
+
+```{r}
+model_dep_diff <- glm(
+  Satisfied_Num ~ Gender + Customer_Type + Type_of_Travel + Class +
+    Age + Flight_Distance +
+    Departure_Delay_in_Minutes + Delay_Difference +
+    Cabin_Score + Booking_Score + Handling_Score + Digital_Score,
+  data = model_data,
+  family = binomial
+)
+
+model_dep_only <- update(model_dep_diff, . ~ . - Delay_Difference)
+model_arr_only <- update(full_model, . ~ . - Departure_Delay_in_Minutes)
+
+# VIF za model sa kašnjenjem pri polasku i razlikom
+x_matrix_2 <- model.matrix(model_dep_diff)[, -1]
+round(sort(diag(solve(cor(x_matrix_2))), decreasing = TRUE), 2)
+
+# Poređenje modela
+AIC(full_model, model_dep_diff, model_dep_only, model_arr_only)
+```
+Model sa kašnjenjem pri polasku i razlikom (`Delay_Difference`) ima isti AIC (84058,89) kao model sa oba kašnjenja, jer je to isti model zapisan na drugi način (kašnjenje pri dolasku je zbir kašnjenja pri polasku i razlike), ali bez multikolinearnosti: najveći VIF je 2,07 (`ClassEco`), a kašnjenje pri polasku i razlika imaju VIF 1,01. Model samo sa kašnjenjem pri polasku ima za oko 99 veći AIC (84157,68), pa je znatno lošiji, dok model samo sa kašnjenjem pri dolasku ima za oko 11 veći AIC (84069,89), što je blizu granice jasne razlike. Prema tome, kašnjenje pri dolasku nosi više informacije o zadovoljstvu nego kašnjenje pri polasku, a razlika `Delay_Difference` dodaje informaciju koja nedostaje kada se koristi samo kašnjenje pri polasku. Treba imati u vidu da je razlika od 11 jedinica mala u odnosu na ukupnu vrednost AIC.
+
+U modelovanju koristimo kašnjenje pri polasku zajedno sa razlikom `Delay_Difference`, jer taj par čuva informacije oba kašnjenja bez multikolinearnosti. Kašnjenje pri dolasku ne koristimo istovremeno sa njima.
+
+## Provera interakcije klase i svrhe putovanja
+
+U prethodnom delu analize uočeno je da se razlika između klasa leta ne ponaša isto kod poslovnih i kod ličnih putovanja: kod poslovnih putovanja zadovoljstvo se jako razlikuje između klasa, dok je kod ličnih nisko u svim klasama. Hi-kvadrat test nad kombinovanom kategorijom pokazuje samo da su raspodele zadovoljstva različite između kombinacija, ali ne ispituje direktno da li se uticaj klase menja u zavisnosti od svrhe putovanja. Zbog toga poredimo dva logistička modela, jedan bez i jedan sa članom interakcije `Class × Type_of_Travel`, testom odnosa verodostojnosti (likelihood ratio test). Nulta hipoteza glasi da je uticaj klase na šansu za zadovoljstvo isti kod poslovnih i ličnih putovanja.
+
+Test se sprovodi na dva načina: bez prilagođavanja (samo klasa i svrha putovanja) i uz prilagođavanje ostalim promenljivama.
+
+```{r}
+# 1. Bez prilagođavanja
+m_main <- glm(Satisfied_Num ~ Class + Type_of_Travel,
+              data = model_data, family = binomial)
+m_int  <- glm(Satisfied_Num ~ Class * Type_of_Travel,
+              data = model_data, family = binomial)
+
+anova(m_main, m_int, test = "Chisq")
+```
+
+```{r}
+# 2. Uz prilagođavanje ostalim promenljivama
+m_main_adj <- glm(
+  Satisfied_Num ~ Class + Type_of_Travel + Gender + Customer_Type +
+    Age + Flight_Distance + Departure_Delay_in_Minutes + Delay_Difference +
+    Cabin_Score + Booking_Score + Handling_Score + Digital_Score,
+  data = model_data, family = binomial
+)
+m_int_adj <- update(m_main_adj, . ~ . + Class:Type_of_Travel)
+
+anova(m_main_adj, m_int_adj, test = "Chisq")
+```
+
+Zbog velikog broja opservacija test će gotovo sigurno biti značajan, pa je važnija veličina efekta. Zato računamo i šansu (odds) za zadovoljstvo u svakoj klasi u odnosu na Eco klasu, posebno za svaku svrhu putovanja.
+
+```{r}
+model_data %>%
+  group_by(Type_of_Travel, Class) %>%
+  summarise(p = mean(Satisfied_Num), .groups = "drop") %>%
+  mutate(odds = p / (1 - p)) %>%
+  group_by(Type_of_Travel) %>%
+  mutate(
+    Procenat_zadovoljnih = round(p * 100, 1),
+    Sansa_naspram_Eco = round(odds / odds[Class == "Eco"], 2)
+  ) %>%
+  ungroup() %>%
+  select(Type_of_Travel, Class, Procenat_zadovoljnih, Sansa_naspram_Eco)
+```
+## Izbor promenljivih za modelovanje
+
+Na osnovu rezultata multivarijantne analize definišemo skup promenljivih koji ulazi u modelovanje.
+
+| Promenljiva | Odluka | Obrazloženje |
+|---|---|---|
+| `Class` | Zadržava se (nominalna) | Jaka povezanost sa zadovoljstvom (V = 0,503). Uticaj zavisi od svrhe putovanja, pa se u logističkoj regresiji uključuje i interakcija sa `Type_of_Travel`. |
+| `Type_of_Travel` | Zadržava se | Jaka povezanost sa zadovoljstvom (V = 0,450). VIF je nizak (1,85). |
+| `Customer_Type` | Zadržava se | Umerena povezanost sa zadovoljstvom (V = 0,186), VIF 1,47. |
+| `Gender` | Zadržava se za sada | Veoma slaba povezanost sa zadovoljstvom (V = 0,011), VIF 1,00. Važnost se proverava u modelu. |
+| `Age`, `Flight_Distance` | Zadržavaju se u numeričkom obliku | Veza starosti sa zadovoljstvom ima oblik slova U, pa je za logističku regresiju moguće bolje koristiti `Age_Group`. O tome se odlučuje u fazi modelovanja. |
+| `Departure_Delay_in_Minutes` i `Delay_Difference` | Zadržavaju se | Kašnjenja pri polasku i dolasku imaju VIF veći od 12. Par polazak + razlika sadrži istu informaciju bez multikolinearnosti i ima znatno niži AIC nego samo polazak. |
+| `Arrival_Delay_in_Minutes` | Ne koristi se uz prethodne | Zbir kašnjenja pri polasku i razlike, pa izaziva multikolinearnost. |
+| `Cabin_Score`, `Booking_Score`, `Handling_Score`, `Digital_Score` | Zadržavaju se | Određene na osnovu PCA, VIF od 1,05 do 1,32. Pri poređenju modela mogu se uporediti i sa 13 pojedinačnih ocena. |
+| `Pre_Flight_Score`, `Comfort_Score`, `Service_Score` | Ne koriste se | Zamenjene novim ocenama iz PCA. |
+| `Not_Rated_Count` | Kandidat | Veza sa zadovoljstvom nije linearna, pa se njena korisnost proverava u modelu. |
+| Kategorije kašnjenja, `Age_Group`, `Flight_Distance_Category`, `Class_Ordered` | Ne koriste se zajedno sa originalnim oblikom | Izvedene su iz promenljivih koje su već u skupu i služe za interpretaciju. |
+
+## Zaključak: ocene usluga, multikolinearnost i izbor promenljivih
+
+Analiza glavnih komponenti pokazala je da se 13 ocena usluga grupiše u četiri komponente (zajedno objašnjavaju 68,7% varijanse), koje odgovaraju doživljaju u kabini, organizaciji putovanja, osoblju i rukovanju i digitalnim koracima pre leta. Prvobitno intuitivno grupisanje samo je delimično potvrđeno, pa su formirane četiri nove zbirne ocene. Digitalni koraci najviše razdvajaju zadovoljne od nezadovoljnih putnika (razlika prosečnih ocena 1,01), a organizacija putovanja najmanje (0,37). Poređenje po segmentima pokazalo je da se ova slika razlikuje prema svrsi putovanja: kod poslovnih putnika važne su kabina, digitalni koraci i osoblje, a kod putnika na ličnim putovanjima organizacija putovanja i digitalni koraci.
+
+Provera multikolinearnosti pokazala je da je problem samo odnos kašnjenja pri polasku i dolasku (VIF veći od 12), koji se rešava korišćenjem kašnjenja pri polasku zajedno sa razlikom `Delay_Difference`. Interakcija klase i svrhe putovanja je značajna i bez i uz prilagođavanje ostalim promenljivama: klasa je jako povezana sa zadovoljstvom kod poslovnih putovanja (šansa 6,03 puta veća u poslovnoj klasi nego u Eco klasi), a kod ličnih putovanja gotovo nije (1,17). Svi rezultati opisuju povezanost u posmatranom skupu podataka i ne dokazuju uzročno-posledične veze. Izabrane promenljive koriste se u narednoj fazi, izgradnji i evaluaciji modela mašinskog učenja.
