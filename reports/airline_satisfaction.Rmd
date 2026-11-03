@@ -1,10 +1,10 @@
 ---
 title: "Airline satisfaction data"
 output:
+  html_document: default
+  pdf_document: default
   word_document: 
     reference_docx: template.docx
-  pdf_document: default
-  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -282,7 +282,7 @@ Proverom numeričkih promenljivih Age, Flight_Distance, Departure_Delay_in_Minut
 
 Na osnovu ovih provera, u navedenim promenljivama nisu uočene anomalije ovog tipa. Ipak, ovo ne isključuje mogućnost postojanja drugih anomalija ili neuobičajenih vrednosti koje zahtevaju dodatnu analizu.
 
-Pre nego što pređemo na dalju analizu, potrebno je da se osvrnemo na ocene usluga (kolone poput `Inflight_wifi_service`, `Food_and_drink`, itd.). Prema zvaničnoj dokumentaciji skupa podataka, ocene se kreću u opsegu od 1 do 5, pri čemu **vrednost 0 označava da usluga nije ocenjena** (npr. putnik nije koristio WiFi, nije konzumirao hranu, ili let nije imao tu uslugu).
+Pre nego što pređemo na dalju analizu, potrebno je da se osvrnemo na ocene usluga (kolone poput `Inflight_wifi_service`, `Food_and_drink`, itd.). Prema zvaničnoj dokumentaciji skupa podataka, ocene se kreću u opsegu od 0 do 5, pri čemu **vrednost 0 označava da usluga nije ocenjena** (npr. putnik nije koristio WiFi, nije konzumirao hranu, ili let nije imao tu uslugu).
 
 ```{r}
 rating_columns <- c(
@@ -503,7 +503,7 @@ ggplot(data, aes(y = Arrival_Delay_in_Minutes)) +
 
 Boxplot pokazuje da je većina vrednosti kašnjenja pri dolasku koncentrisana oko nule, dok je interkvartilni raspon mali. Iznad gornjeg brka nalazi se veći broj potencijalno ekstremnih opservacija, koje predstavljaju duža kašnjenja. Ovakav raspored dodatno potvrđuje izraženu asimetriju distribucije udesno.
 
-Potencijalne ekstremne vrednosti nećemo automatski uklanjati, jer mogu predstavljati stvarna kašnjenja i važnu informaciju za analizu zadovoljstva putnika. Njihov uticaj biće dodatno razmotren u kasnijim fazama analize i pripreme podataka. Povezanost između kašnjenja pri polasku i kašnjenja pri dolasku biće ispitana u okviru bivarijantne analize.
+Potencijalne ekstremne vrednosti nećemo automatski uklanjati, jer mogu predstavljati stvarna kašnjenja i važnu informaciju za analizu zadovoljstva putnika. Njihov uticaj biće dodatno razmotren u kasnijim fazama analize i pripreme podataka. Povezanost između kašnjenja pri polasku i kašnjenja pri dolasku ispitana je u okviru inženjeringa obeležja.
 
 ## Bivarijantna analiza
 
@@ -572,14 +572,12 @@ Da bismo formalno proverili da li postoji povezanost između pola i zadovoljstva
 ```{r}
 gender_satisfaction_table <- table(data$Gender, data$Satisfaction)
 
-gender_satisfaction_table
-
-gender_chisq <- chisq.test(gender_satisfaction_table)
-
+# Hi-kvadrat test bez Yatesove korekcije radi ujednačenosti sa ostalim testovima
+gender_chisq <- chisq.test(gender_satisfaction_table, correct = FALSE)
 gender_chisq
 ```
 
-Rezultat hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između pola i zadovoljstva putnika, χ²(1) = 16,352, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+Rezultat hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između pola i zadovoljstva putnika, χ²(1) = 16,354, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
 
 Međutim, statistička značajnost ne znači nužno da je razlika praktično velika. U grupi žena zadovoljni putnici čine 42,9%, dok kod muškaraca čine 44,0%, što predstavlja razliku od približno 1,1 procentnog poena. Zbog velikog broja opservacija i ovako mala razlika može biti statistički značajna.
 
@@ -870,7 +868,8 @@ ggplot(data, aes(x = Satisfaction, y = Age, fill = Satisfaction)) +
   ) +
   theme(legend.position = "none")
 ```
-Vizuelni prikaz boxplot dijagrama dodatno potvrđuje uočene razlike u raspodeli starosti. Vidljivo je da je medijana starosti kod zadovoljnih putnika pomerena naviše u odnosu na nezadovoljne, a interkvartilni rasponi ukazuju na to da starije generacije putnika u ovom uzorku pokazuju stabilniji stepen zadovoljstva uslugama aviokompanije.
+
+Vizuelni prikaz boxplot dijagrama jasno potvrđuje da grupa zadovoljnih putnika ima znatno višu medijanu i širi interkvartilni opseg dužine leta u poređenju sa nezadovoljnim putnicima. Kod nezadovoljnih putnika distribucija je snažno skoncentrisana na kraćim relacijama, uz prisustvo gornjih outlier-a, što dodatno potvrđuje da duži letovi u ovom uzorku koreliraju sa višim nivoom zadovoljstva putnika. Ova veza detaljnije je ispitana u multivarijantnoj analizi.
 
 ### Uticaj dužine leta na zadovoljstvo (Flight Distance vs. Satisfaction)
 
@@ -887,7 +886,8 @@ data %>%
     Max_Distanca = max(Flight_Distance, na.rm = TRUE)
   )
 ```
-Analiza statističkih pokazatelja za dužinu leta ukazuje na primetnu razliku između dve grupe putnika. Zadovoljni putnici u proseku putuju na znatno duže relacije (prosečna dužina leta iznosi oko 1530 milja, uz medijanu od 1249 milja), dok nezadovoljni putnici u proseku ostvaruju kraće letove (prosek oko 930 milja, sa medijanom od 674 milja). Ovi podaci sugerišu da putnici na dužim relacijama, uprkos dužem trajanju putovanja, češće iskazuju zadovoljstvo, što može biti povezano sa češćim korišćenjem pogodnosti biznis klase ili kvalitetnijom uslugom na dugim letovima.
+
+Analiza statističkih pokazatelja za kašnjenje pri dolasku pokazuje da je medijana i za zadovoljne i za nezadovoljne putnike 0 minuta, što ukazuje na to da je najmanje polovina letova uspešno sletela bez kašnjenja. Međutim, prosečno kašnjenje pri dolasku je nešto veće kod nezadovoljnih putnika (oko 17.1 minuta) u poređenju sa zadovoljnim putnicima (oko 12.5 minuta). Ova razlika ukazuje na to da kašnjenja na krajnjoj destinaciji mogu uticati na formiranje negativnog utiska kod putnika.
 
 ```{r}
 p_dist_sat <- ggplot(data, aes(x = Satisfaction, y = Flight_Distance, fill = Satisfaction)) +
@@ -986,32 +986,22 @@ U ovom segmentu analiziramo uticaj pojedinačnih ocena usluga (merenih na skali 
 Ukrštanjem prosečnih vrednosti svih ocena sa statusom zadovoljstva dobijamo jasan uvid u to u kojim segmentima usluga nastaju najveće razlike u percepciji kvaliteta.
 
 ```{r}
-# Zbirni pregled prosečnih ocena za sve usluge prema statusu zadovoljstva
-zbirne_ocene <- data %>%
+# Zbirni pregled prosečnih ocena za svih 13 usluga prema statusu zadovoljstva
+zbirne_ocene_sve <- data %>%
   group_by(Satisfaction) %>%
   summarise(
-    WiFi = mean(Inflight_wifi_service, na.rm = TRUE),
-    Online_Cekiranje = mean(Online_boarding, na.rm = TRUE),
-    Udobnost_Sedista = mean(Seat_comfort, na.rm = TRUE),
-    Zabava_na_Letu = mean(Inflight_entertainment, na.rm = TRUE),
-    Cistoca = mean(Cleanliness, na.rm = TRUE),
-    Hrana_i_Pice = mean(Food_and_drink, na.rm = TRUE),
-    Usluga_u_Avionu = mean(On_board_service, na.rm = TRUE),
-    Rukovanje_Prtljagom = mean(Baggage_handling, na.rm = TRUE)
+    across(all_of(rating_columns), ~ round(mean(., na.rm = TRUE), 2))
   )
 
-zbirne_ocene
+zbirne_ocene_sve
 ```
-**Komentar zbirne tabele i izbor ključnih ocena:**
 
-Na osnovu zbirnog pregleda prosečnih ocena, uočava se jasna diferencijacija između zadovoljnih i nezadovoljnih putnika u nekoliko ključnih kategorija usluga. Kao ključne promenljive sa najvećim uticajem na krajnji status zadovoljstva izdvojile su se sledeće četiri usluge:
-
-1. **Online čekiranje (`Online_boarding`)** — sa najvećom razlikom u prosečnoj oceni (4.03 kod zadovoljnih naspram 2.66 kod nezadovoljnih), što ukazuje da je jednostavnost procesa prijave na let primarni pokretač pozitivnog utiska.
-2. **Zabava na letu (`Inflight_entertainment`)** — gde zadovoljni putnici daju prosek od 3.96, dok nezadovoljni daju samo 2.89.
-3. **Udobnost sedišta (`Seat_comfort`)** — gde je prosečna ocena zadovoljnih 3.97 u odnosu na 3.04 kod nezadovoljnih, čime se potvrdjuje značaj fizičkog komfora tokom leta.
-4. **Wi-Fi usluga (`Inflight_wifi_service`)** — sa prosekom od 3.16 kod zadovoljnih naspram 2.40 kod nezadovoljnih putnika.
-
-U nastavku ćemo za ove četiri izabrane ključne ocene prikazati detaljnu deskriptivnu statistiku i odgovarajuće boxplot dijagrame radi analize njihove distribucije.
+Komentar zbirne tabele i izbor ključnih ocena:
+Na osnovu zbirnog pregleda prosečnih ocena za svih 13 usluga, uočava se diferencijacija između zadovoljnih i nezadovoljnih putnika. Kao ključne promenljive sa najvećom razlikom u prosečnoj oceni i najjačim uticajem na krajnji status zadovoljstva izdvojile su se sledeće četiri usluge:
+- **Online čekiranje (`Online_boarding`)** — sa najvećom razlikom u prosečnoj oceni (4,03 kod zadovoljnih naspram 2,66 kod nezadovoljnih).
+- **Zabava na letu (`Inflight_entertainment`)** — sa prosekom od 3,96 kod zadovoljnih naspram 2,89 kod nezadovoljnih.
+- **Udobnost sedišta (`Seat_comfort`)** — gde je prosečna ocena zadovoljnih 3,97 u odnosu na 3,04 kod nezadovoljnih.
+- **Wi-Fi usluga (`Inflight_wifi_service`)** — sa prosekom od 3,16 kod zadovoljnih naspram 2,40 kod nezadovoljnih putnika.
 
 ### 2. Detaljna analiza ključnih ocena usluga
 
@@ -1140,7 +1130,7 @@ Nakon završene eksplorativne analize podataka (EDA), u kojoj su identifikovane 
 
 Tokom provere kvaliteta podataka u EDA fazi, utvrđeno je da kolona `Arrival_Delay_in_Minutes` sadrži 393 nedostajuće vrednosti (`NA`), dok ostale numeričke i kategorijske promenljive nemaju nedostajuće vrednosti. S obzirom na to da modeli mašinskog učenja i određene statističke procedure zahtevaju potpune podatke bez praznih polja, neophodno je definisati odgovarajuću strategiju imputacije.
 
-Za rešavanje nedostajućih vrednosti u koloni `Arrival_Delay_in_Minutes` koristićemo strategiju popunjavanja na osnovu korelacije sa kašnjenjem pri polasku (`Departure_Delay_in_Minutes`), ili ćemo u slučajevima manjih odstupanja nedostajuće vrednosti zameniti medijanom, odnosno nulom ukoliko kašnjenje na polasku nije zabeleženo.
+Za rešavanje nedostajućih vrednosti u koloni Arrival_Delay_in_Minutes primenjena je imputacija medijanom (vrednostima neosetljivim na ekstremne opservacije). U fazi modelovanja mašinskog učenja, medijana za imputaciju računa se isključivo na trening skupu kako bi se sprečilo curenje podataka (data leakage).
 
 ### 1. Provera broja NA vrednosti pre čišćenja
 ```{r}
@@ -1392,7 +1382,7 @@ Promenljiva `Delay_Difference` ima medijanu 0 i interkvartilni raspon od -2 do 0
 
 Raspon vrednosti, od -530 do 234 minuta, pokazuje da postoje retki letovi sa izuzetno velikom razlikom. Ove opservacije nećemo uklanjati, jer mogu predstavljati stvarne slučajeve (npr. let koji je znatno nadoknadio veliko kašnjenje pri polasku), a njihov uticaj biće razmotren u kasnijim fazama.
 
-Zbog toga što je većina vrednosti koncentrisana oko nule, očekuje se da `Delay_Difference` sama ima slab prediktivni značaj. Njena vrednost je u tome što zamenjuje redundantnu informaciju: umesto da modelu dajemo oba kašnjenja, možemo zadržati kašnjenje pri polasku i razliku, koje nisu međusobno gotovo identične.
+Iako je većina vrednosti koncentrisana oko nule, Delay_Difference nosi informaciju koju kašnjenje pri polasku samo ne sadrži. Njen značaj proverava se u odeljku o multikolinearnosti u multivarijantnoj analizi.
 
 ### Starosne grupe
 
@@ -1536,7 +1526,7 @@ Usluge grupišemo na sledeći način:
 - **Comfort_Score:** udobnost sedišta, prostor za noge i čistoća,
 - **Service_Score:** WiFi, zabava na letu, hrana i piće i usluga osoblja.
 
-Promenljiva `Baggage_handling` ostaje samostalna. Ovo grupisanje predstavlja procenu autora i biće proveravano korelacionom analizom u multivarijantnoj analizi.
+Promenljiva `Baggage_handling` ostaje samostalna. Ovo grupisanje predstavlja procenu autora i biće provereno analizom glavnih komponenti (PCA) u multivarijantnoj analizi.
 
 ```{r}
 pre_flight_cols <- c(
@@ -1574,7 +1564,7 @@ data <- data %>%
 
 summary(data %>% select(Pre_Flight_Score, Comfort_Score, Service_Score))
 ```
-Sve tri zbirne ocene kreću se u rasponu od 1 do 5, što potvrđuje da su neocenjene usluge (vrednost 0) pravilno izostavljene iz proseka. U zbirnim ocenama nema nedostajućih vrednosti, što znači da je svaki putnik ocenio bar jednu uslugu u svakoj od tri grupe. Prosečne vrednosti su prilično slične: najviše je ocenjen komfor (prosek 3,37), zatim usluge tokom leta (3,19), a najniže pripreme pre leta (3,15). Medijane su vrlo bliske prosecima, što ukazuje na relativno simetrične raspodele.
+Sve tri zbirne ocene kreću se u rasponu od 0 do 5, što potvrđuje da su neocenjene usluge (vrednost 0) pravilno izostavljene iz proseka. U zbirnim ocenama nema nedostajućih vrednosti, što znači da je svaki putnik ocenio bar jednu uslugu u svakoj od tri grupe. Prosečne vrednosti su prilično slične: najviše je ocenjen komfor (prosek 3,37), zatim usluge tokom leta (3,19), a najniže pripreme pre leta (3,15). Medijane su vrlo bliske prosecima, što ukazuje na relativno simetrične raspodele.
 
 Da bismo ispitali da li se zbirne ocene razlikuju između zadovoljnih i nezadovoljnih putnika, prikazaćemo uporedne boxplot dijagrame.
 
@@ -1622,7 +1612,7 @@ Skup podataka sada sadrži 129.880 opservacija i 32 promenljive, što znači da 
 
 U ovoj fazi kreirano je 10 novih promenljivih. Kašnjenja pri polasku i dolasku kategorisana su u četiri kategorije, a utvrđeno je da su ona gotovo potpuno linearno povezana (r = 0,959), pa je kreirana promenljiva `Delay_Difference` koja izdvaja ono što se desilo tokom leta. Starost i dužina leta svrstane su u kategorije (`Age_Group`, `Flight_Distance_Category`), pri čemu je kod starosti uočena U-veza sa nezadovoljstvom. Klasa leta predstavljena je i kao uređeni faktor. Vrednosti 0 u ocenama usluga tretirane su kao neocenjene usluge, pa je kreiran `Not_Rated_Count`, a 13 ocena grupisano je u tri zbirne ocene, od kojih komfor i usluge tokom leta najviše razdvajaju zadovoljne od nezadovoljnih putnika.
 
-Sve veze uočene u ovoj fazi posmatrane su pojedinačno, pa mogu biti posledica drugih promenljivih. U narednoj sekciji prelazimo na multivarijantnu analizu, u kojoj ćemo ispitati zajedničko delovanje više promenljivih na zadovoljstvo putnika.
+Sve veze uočene u ovoj fazi posmatrane su pojedinačno, pa mogu biti posledica drugih promenljivih. U narednoj sekciji prelazimo na multivarijantnu analizu, u kojoj ćemo ispitati zajedničko delovanje više promenljivih na zadovoljstvo putnika. Prvobitne tri zbirne ocene su u multivarijantnoj analizi, na osnovu PCA, zamenjene sa četiri nove (Cabin_Score, Booking_Score, Handling_Score, Digital_Score).
 
 # Multivarijantna analiza
 
@@ -1633,12 +1623,13 @@ U prethodnim fazama sprovedena je eksplorativna analiza pojedinačnih promenljiv
 U okviru ovog koraka ispitaćemo linearne i monotonske veze između numeričkih i ordinalnih promenljivih u skupu podataka. S obzirom na to da ocene usluga predstavljaju ordinalne promenljive (na skali od 0 do 5), a pojedine numeričke promenljivosti (poput vremena kašnjenja) imaju izraženu asimetriju, za procenu povezanosti koristićemo **Spearmanov koeficijent korelacije**, koji je robustan na ekstremne vrednosti i ne zahteva normalnu raspodelu podataka.
 
 ```{r}
-# 1. Priprema numeričke verzije ciljne promenljive radi korelacije (1 = Satisfied, 0 = Not Satisfied)
+# 1. Priprema numeričke verzije ciljne promenljive radi korelacije
 data_corr <- data %>%
   mutate(Satisfaction_Num = ifelse(Satisfaction == "Satisfied", 1, 0))
 
-# 2. Izbor relevantnih numeričkih i ordinalnih promenljivih za Spearmanovu matricu
+# 2. Izbor relevantnih promenljivih i tretiranje nula kao NA za ocene
 vars_for_corr <- data_corr %>%
+  mutate(across(all_of(rating_columns), ~ na_if(., 0))) %>%
   select(
     Satisfaction_Num, 
     Age, 
@@ -1649,19 +1640,17 @@ vars_for_corr <- data_corr %>%
     Delay_Difference
   )
 
-# 3. Računanje Spearmanove matrice korelacije
-spearman_matrix <- cor(vars_for_corr, method = "spearman", use = "complete.obs")
+# 3. Računanje Spearmanove matrice korelacije korišćenjem pairwise.complete.obs
+spearman_matrix <- cor(vars_for_corr, method = "spearman", use = "pairwise.complete.obs")
 
 # 4. Prikaz korelacija sa ciljnom promenljivom (Satisfaction_Num)
 corr_with_sat <- spearman_matrix["Satisfaction_Num", ]
 sort(corr_with_sat, decreasing = TRUE)
 ```
 
-Na osnovu izračunatih vrednosti Spearmanovog koeficijenta korelacije sa ciljnom promenljivom `Satisfaction_Num`, uočava se da najjaču pozitivnu povezanost sa zadovoljstvom putnika ostvaruju ocene usluga vezane za proces online prijave i komfor tokom leta. Najveću korelaciju beleži ocena online čekiranja (`Online_boarding`, $r \approx 0,55$), što ukazuje na ključni značaj digitalnih servisa za pozitivno iskustvo putnika. Slede ocene zabave na letu (`Inflight_entertainment`, $r \approx 0,40$) i udobnosti sedišta (`Seat_comfort`, $r \approx 0,36$). 
+Na osnovu izračunatih vrednosti Spearmanovog koeficijenta korelacije sa ciljnom promenljivom `Satisfaction_Num`, uočava se da najjaču pozitivnu povezanost sa zadovoljstvom putnika ostvaruju ocene usluga vezane za proces online prijave i komfor tokom leta. Najveću korelaciju beleži ocena online čekiranja (`Online_boarding`, r = 0,55), što ukazuje na ključni značaj digitalnih servisa za pozitivno iskustvo putnika. Slede ocene zabave na letu (`Inflight_entertainment`, r = 0,40) i udobnosti sedišta (`Seat_comfort`, r = 0,36). 
 
-Sa druge strane, kašnjenja (`Departure_Delay_in_Minutes` i `Arrival_Delay_in_Minutes`) pokazuju slabu negativnu korelaciju sa zadovoljstvom, pri čemu kašnjenje pri dolasku ima nešto izraženiji negativni uticaj ($r \approx -0,10$), dok promenljiva `Gate_location` i `Delay_Difference` imaju zanemarljivu linearnu/monotonsku povezanost sa krajnjim zadovoljstvom.
-
-U cilju detekcije potencijalne multikolinearnosti i analize strukture odnosa između ulaznih promenljivih, izdvojeni su parovi kod kojih je apsolutna vrednost Spearmanovog koeficijenta korelacije veća od 0,5 ($|r| > 0,5$).
+Sa druge strane, kašnjenja (`Departure_Delay_in_Minutes` i `Arrival_Delay_in_Minutes`) pokazuju slabu negativnu korelaciju sa zadovoljstvom, pri čemu kašnjenje pri dolasku ima nešto izraženiji negativni uticaj (r = -0,10), dok promenljive `Gate_location` i `Delay_Difference` imaju zanemarljivu linearnu/monotonsku povezanost sa krajnjim zadovoljstvom.
 
 ```{r}
 # Pronalaženje parova promenljivih sa visokom korelacijom (|r| > 0.5)
@@ -1678,7 +1667,9 @@ high_corr_pairs <- cor_melted %>%
 head(high_corr_pairs, 10)
 ```
 
-Izlaz funkcije potvrđuje prisustvo značajne povezanosti između određenih promenljivih. Najveću korelaciju među ulaznim karakteristikama ostvaruju kašnjenje pri dolasku i kašnjenje pri polasku ($r \approx 0,736$), što i statistički dokazuje visoku redundantnost i postojanje multikolinearnosti. Pored toga, uočava se da brojne ocene usluga (npr. povezanost između online rezervacije i wi-fi usluge sa $r \approx 0,71$, kao i međusobne korelacije ocena čistoće, zabave na letu, udobnosti sedišta i hrane) beleže vrednosti $|r| > 0,5$. Ovakav rezultat daje snažnu empirijsku potvrdu i opravdanje za kreiranje zbirnih ocena usluga u fazi inženjeringa obeležja, jer se time uspešno smanjuje dimenzionalnost prostora obeležja i izbegava narušavanje stabilnosti budućih modela usled kolinearnosti.
+Izlaz funkcije ukazuje na prisustvo značajne povezanosti između određenih promenljivih. Najveću korelaciju među ulaznim karakteristikama ostvaruju kašnjenje pri dolasku i kašnjenje pri polasku (r = 0,736), što ukazuje na visoku redundantnost i postojanje multikolinearnosti. Spearmanov koeficijent iznosi 0,736, dok je Pearsonov koeficijent iz inženjeringa obeležja iznosio 0,959, jer je više od polovine vrednosti kašnjenja jednako nuli, pa u Spearmanovoj analizi postoji veliki broj izjednačenih rangova.
+
+Ovakav rezultat ukazuje na to da se pojedine ocene usluga kreću zajedno, što je razlog za grupisanje srodnih ocena. Opravdanost konkretnog grupisanja proverava se analizom glavnih komponenti u odeljku o strukturi ocena usluga.
 
 ## Provera zbirnih ocena i odluka o kašnjenjima
 
@@ -1706,16 +1697,15 @@ Kao vizuelna potvrda dobijenih statističkih pokazatelja, u nastavku je prikazan
 
 ```{r}
 # Kreiranje data frame-a za vizuelizaciju matrica korelacija ključnih promenljivih
-library(reshape2)
-
+# Vizuelizacija matrice korelacija ključnih promenljivih bez biblioteke reshape2
 key_vars_corr <- data_corr %>%
   select(Satisfaction_Num, Pre_Flight_Score, Comfort_Score, Service_Score, 
          Departure_Delay_in_Minutes, Delay_Difference, Age, Flight_Distance)
 
 key_matrix <- cor(key_vars_corr, method = "spearman", use = "complete.obs")
-melted_cormat <- melt(key_matrix)
+melted_cormat <- as.data.frame(as.table(key_matrix))
 
-ggplot(melted_cormat, aes(Var1, Var2, fill = value)) +
+ggplot(melted_cormat, aes(Var1, Var2, fill = Freq)) +
   geom_tile(color = "white") +
   scale_fill_gradient2(low = "#e74c3c", mid = "white", high = "#2ecc71", 
                        midpoint = 0, limit = c(-1,1), name = "Spearman\nCorr") +
@@ -1729,10 +1719,10 @@ ggplot(melted_cormat, aes(Var1, Var2, fill = value)) +
   )
 ```
 
-Na prikazanom korelacionom dijagramu (heatmap) jasno se uočavaju tri ključne grupe odnosa:
-- **Zadovoljstvo i ocene usluga:** Promenljiva `Satisfaction_Num` pokazuje izrazito jaku pozitivnu povezanost (tamnozelena polja) sa zbirnim ocenama (`Service_Score`, `Comfort_Score` i `Pre_Flight_Score`), što potvrđuje da kvalitet usluga presudno utiče na krajnje zadovoljstvo putnika.
-- **Međusobna povezanost ocena:** Tri zbirne ocene usluga takođe beleže visoke međusobne korelacije, što ukazuje na to da putnici koji su zadovoljni jednim segmentom putovanja uglavnom visoko ocenjuju i ostale segmente.
-- **Kašnjenja i ostali faktori:** Metrike kašnjenja (`Departure_Delay_in_Minutes` i `Delay_Difference`) pokazuju slabu ili neutralnu povezanost sa ocenama i zadovoljstvom, dok promenljive poput starosti (`Age`) i dužine leta (`Flight_Distance`) ostaju uglavnom nezavisne od ocena usluga.
+Na prikazanom korelacionom dijagramu prikazane su prvobitne zbirne ocene, koje se u narednom PCA odeljku zamenjuju novim. Sa dijagrama se uočavaju sledeći odnosi:
+- **Zadovoljstvo i ocene usluga:** Promenljiva `Satisfaction_Num` pokazuje umerenu do umereno jaku pozitivnu povezanost sa prvobitnim zbirnim ocenama (`Service_Score`, `Comfort_Score` i `Pre_Flight_Score`), što potvrđuje da percepcija kvaliteta usluga prati opšte zadovoljstvo putnika.
+- **Međusobna povezanost ocena:** Prvobitne zbirne ocene usluga pokazuju međusobnu povezanost (posebno `Comfort_Score` i `Service_Score`), što ukazuje na to da putnici teže ujednačenom ocenjivanju različitih aspekata leta.
+- **Kašnjenja i ostali faktori:** Metrike kašnjenja (`Departure_Delay_in_Minutes` i `Delay_Difference`) pokazuju slabu do zanemarljivu korelaciju sa ocenama i zadovoljstvom, dok starost (`Age`) i dužina leta (`Flight_Distance`) imaju blagu do slabu povezanost.
 
 
 ## Multivarijantna analiza kategorijskih promenljivih
@@ -1812,8 +1802,6 @@ Najizraženija povezanost uočava se između promenljivih `Type_of_Travel` i `Cl
 
 Ove rezultate treba uzeti u obzir pri tumačenju kombinovanih analiza, jer neke promenljive nisu međusobno nezavisne. Cramerov V opisuje jačinu povezanosti, ali ne pokazuje uzročnost.
 
-Pri tumačenju treba razlikovati statističku povezanost od uzročno-posledične veze. Visok Cramerov V pokazuje da se kategorije dve promenljive često pojavljuju zajedno, ali ne dokazuje da jedna promenljiva uzrokuje drugu.
-
 
 ### Zadovoljstvo prema kombinaciji klase i svrhe putovanja
 
@@ -1875,14 +1863,15 @@ class_travel_chisq
 ```
 
 
+Rezultati pokazuju da se zadovoljstvo putnika značajno razlikuje u zavisnosti od kombinacije klase leta i svrhe putovanja. Kod poslovnih putovanja najveći procenat zadovoljnih putnika zabeležen je u poslovnoj klasi, gde je 72,0% putnika zadovoljno. U ekonomskoj klasi zadovoljnih je 29,9%, dok je u klasi Eco Plus zadovoljnih 39,3%.
 
-Rezultati pokazuju da se zadovoljstvo putnika značajno razlikuje u zavisnosti od kombinacije klase leta i svrhe putovanja. Kod poslovnih putovanja najveći procenat zadovoljnih putnika zabeležen je u poslovnoj klasi, gde je 72,0% putnika zadovoljno. U ekonomskoj klasi zadovoljnih je 30,0%, dok je u klasi Eco Plus zadovoljnih 39,3%.
-
-Kod ličnih putovanja procenat zadovoljnih putnika je znatno niži u svim klasama. U poslovnoj klasi zadovoljno je 11,7% putnika, u ekonomskoj 10,2%, a u klasi Eco Plus 8,74%. To pokazuje da sama klasa leta ne objašnjava u potpunosti zadovoljstvo, već da važnu ulogu ima i svrha putovanja.
+Kod ličnih putovanja procenat zadovoljnih putnika je znatno niži u svim klasama. U poslovnoj klasi zadovoljno je 11,7% putnika, u ekonomskoj 10,2%, a u klasi Eco Plus 8,7%. To pokazuje da sama klasa leta ne objašnjava u potpunosti zadovoljstvo, već da važnu ulogu ima i svrha putovanja.
 
 Pearsonov hi-kvadrat test pokazuje statistički značajnu povezanost između klase leta, svrhe putovanja i zadovoljstva putnika, χ²(5) = 39861, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti ovih kategorijskih promenljivih.
 
-Ipak, zbog veoma velikog broja opservacija, statistička značajnost ne znači nužno da su sve razlike praktično podjednako važne. Takođe, ovaj test ne dokazuje uzročno-posledičnu vezu, već samo pokazuje da su raspodele zadovoljstva povezane sa kombinacijom klase leta i svrhe putovanja.
+Ipak, zbog velikog broja opservacija, statistička značajnost ne znači nužno da su sve razlike praktično podjednako važne. Takođe, ovaj test ne dokazuje uzročno-posledičnu vezu, već samo pokazuje da su raspodele zadovoljstva povezane sa kombinacijom klase leta i svrhe putovanja.
+
+Formalna provera interakcije klase i svrhe putovanja sprovedena je u odeljku o interakciji (test odnosa verodostojnosti).
 
 ### Zadovoljstvo prema kombinaciji tipa korisnika i svrhe putovanja
 
@@ -2022,7 +2011,7 @@ Ovi rezultati ukazuju da se obrazac povezanosti starosti i zadovoljstva ne može
 
 Pearsonov hi-kvadrat test pokazuje statistički značajnu povezanost između kombinacije starosne grupe i klase leta i zadovoljstva putnika, χ²(14) = 36035, p < 0,001. Zbog toga odbacujemo nultu hipotezu o nezavisnosti.
 
-Ipak, test ne dokazuje uzročno-posledičnu vezu niti samostalno potvrđuje formalnu interakciju između starosne grupe i klase. On pokazuje da se raspodela zadovoljstva značajno razlikuje između posmatranih kombinacija kategorija.
+Ipak, test ne dokazuje uzročno-posledičnu vezu niti samostalno potvrđuje formalnu interakciju između starosne grupe i klase. On pokazuje da se raspodela zadovoljstva značajno razlikuje između posmatranih kombinacija kategorija. Kombinacije ekstrema (poput mlađih od 18 i starijih od 65 godina u kombinaciji sa ređe zastupljenom klasom Eco Plus) obuhvataju mali broj opservacija u koloni Broj, zbog čega su procene unutar tih specifičnih grupa podložnije većoj varijabilnosti i manje pouzdane.
 
 ### Zadovoljstvo prema kombinaciji dužine leta i klase
 
@@ -2156,7 +2145,6 @@ Predznak koeficijenata u PCA je proizvoljan, pa se tumače njihove apsolutne vre
 
 Druga komponenta (19,0%) izdvaja ocene vezane za organizaciju putovanja: online rezervaciju (0,52), lokaciju gejta (0,46), pogodnost vremena polaska i dolaska (0,46) i WiFi (0,41). Uočava se da se WiFi grupiše sa rezervacijom, a ne sa ostalim uslugama tokom leta. Treća komponenta (13,6%) suprotstavlja uslugu osoblja, rukovanje prtljagom i prostor za noge (koeficijenti oko -0,4 do -0,5) sa hranom i pićem, udobnošću sedišta i čistoćom (koeficijenti oko 0,3). Četvrta komponenta (7,7%) izdvaja online ukrcavanje (0,61) i prijavu na let (0,45), odnosno digitalne korake pre leta.
 
-Ovi rezultati samo delimično potvrđuju početno grupisanje ocena u tri zbirne ocene, jer se ocene prema PCA grupišu drugačije od pretpostavljenog.
 
 ### Rotirana struktura komponenti (varimax)
 
@@ -2205,7 +2193,7 @@ data <- data %>%
 
 summary(data %>% select(Cabin_Score, Booking_Score, Handling_Score, Digital_Score))
 ```
-Sve četiri zbirne ocene kreću se u rasponu od 1 do 5, što potvrđuje da su neocenjene usluge (vrednost 0) izostavljene iz proseka. U zbirnim ocenama nema nedostajućih vrednosti, što znači da je svaki putnik ocenio bar jednu uslugu u svakoj od četiri grupe, uključujući i `Digital_Score`, koja se sastoji od samo dve usluge. Najviše je ocenjeno rukovanje i osoblje (prosek 3,46), zatim doživljaj u kabini (3,32) i digitalni koraci pre leta (3,32), a najniže organizacija putovanja (prosek 2,97, medijana 3,0). Medijane su bliske prosecima, što ukazuje na relativno simetrične raspodele.
+Sve četiri zbirne ocene kreću se u rasponu od 0 do 5, što potvrđuje da su neocenjene usluge (vrednost 0) izostavljene iz proseka. U zbirnim ocenama nema nedostajućih vrednosti, što znači da je svaki putnik ocenio bar jednu uslugu u svakoj od četiri grupe, uključujući i `Digital_Score`, koja se sastoji od samo dve usluge. Najviše je ocenjeno rukovanje i osoblje (prosek 3,46), zatim doživljaj u kabini (3,32) i digitalni koraci pre leta (3,32), a najniže organizacija putovanja (prosek 2,97, medijana 3,0). Medijane su bliske prosecima, što ukazuje na relativno simetrične raspodele.
 
 Da bismo ispitali da li se nove zbirne ocene razlikuju između zadovoljnih i nezadovoljnih putnika, prikazaćemo uporedne boxplot dijagrame, a zatim i prosečne ocene po grupama zadovoljstva.
 
