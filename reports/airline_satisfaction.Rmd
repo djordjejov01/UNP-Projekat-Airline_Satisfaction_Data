@@ -1130,7 +1130,7 @@ Nakon završene eksplorativne analize podataka (EDA), u kojoj su identifikovane 
 
 Tokom provere kvaliteta podataka u EDA fazi, utvrđeno je da kolona `Arrival_Delay_in_Minutes` sadrži 393 nedostajuće vrednosti (`NA`), dok ostale numeričke i kategorijske promenljive nemaju nedostajuće vrednosti. S obzirom na to da modeli mašinskog učenja i određene statističke procedure zahtevaju potpune podatke bez praznih polja, neophodno je definisati odgovarajuću strategiju imputacije.
 
-Za rešavanje nedostajućih vrednosti u koloni Arrival_Delay_in_Minutes primenjena je imputacija medijanom (vrednostima neosetljivim na ekstremne opservacije). U fazi modelovanja mašinskog učenja, medijana za imputaciju računa se isključivo na trening skupu kako bi se sprečilo curenje podataka (data leakage).
+Za rešavanje nedostajućih vrednosti u koloni `Arrival_Delay_in_Minutes` koristimo kašnjenje pri polasku istog leta (`Departure_Delay_in_Minutes`). Ove dve promenljive su gotovo potpuno linearno povezane, a kod letova sa poznatim vrednostima razlika između njih je u većini slučajeva blizu nule, što se detaljnije prikazuje u odeljku o inženjeringu obeležja. Imputacija medijanom (0 minuta) nije odgovarajuća, jer je kod letova sa nedostajućom vrednošću kašnjenje pri polasku često veliko (prosek 37,9 minuta, maksimum 530 minuta), pa bi medijana veštački stvorila velike negativne razlike između kašnjenja pri dolasku i polasku. Pošto se vrednost popunjava iz istog reda, ne koristi se nijedna statistika izračunata nad celim skupom, pa nema curenja podataka pri podeli na trening i test skup.
 
 ### 1. Provera broja NA vrednosti pre čišćenja
 ```{r}
@@ -1140,15 +1140,16 @@ colSums(is.na(data))
 
 ### 2. Strategija imputacije za Arrival_Delay_in_Minutes
 
-Ukoliko je Arrival_Delay nedostajuća, a Departure poznata, možemo je zameniti vrednošću departure-a, 
-ili u krajnjem slučaju medijanom ove kolone. Ovde koristimo medijanu da ne bismo narušili distribuciju.
+Ukoliko je `Arrival_Delay_in_Minutes` nedostajuća, zamenjujemo je vrednošću `Departure_Delay_in_Minutes` istog leta.
 
 ```{r}
-median_arr_delay <- median(data$Arrival_Delay_in_Minutes, na.rm = TRUE)
-
 data <- data %>%
   mutate(
-    Arrival_Delay_in_Minutes = ifelse(is.na(Arrival_Delay_in_Minutes), median_arr_delay, Arrival_Delay_in_Minutes)
+    Arrival_Delay_in_Minutes = ifelse(
+      is.na(Arrival_Delay_in_Minutes),
+      Departure_Delay_in_Minutes,
+      Arrival_Delay_in_Minutes
+    )
   )
 ```
 ### 3. Provera nakon čišćenja
@@ -1671,29 +1672,9 @@ Izlaz funkcije ukazuje na prisustvo značajne povezanosti između određenih pro
 
 Ovakav rezultat ukazuje na to da se pojedine ocene usluga kreću zajedno, što je razlog za grupisanje srodnih ocena. Opravdanost konkretnog grupisanja proverava se analizom glavnih komponenti u odeljku o strukturi ocena usluga.
 
-## Provera zbirnih ocena i odluka o kašnjenjima
+## Matrica korelacija ključnih obeležja
 
-Kako bismo verifikovali da li formiranje tri zbirne ocene (`Pre_Flight_Score`, `Comfort_Score`, `Service_Score`) ima smisla i da li adekvatno reprezentuju originalne unikatne ocene, izračunaćemo korelacije između zbirnih ocena i njihovih sastavnih delova. Takođe, na osnovu uočene multikolinearnosti između kašnjenja, donećemo odluku o izboru promenljivih koje će se koristiti u daljoj multivarijantnoj analizi.
-
-```{r}
-# 1. Provera korelacije zbirnih ocena sa originalnim ocenama koje ih čine
-validation_df <- data %>%
-  select(Pre_Flight_Score, Comfort_Score, Service_Score, all_of(rating_columns))
-
-val_corr <- cor(validation_df, method = "spearman", use = "complete.obs")
-
-# Prikaz korelacija zbirnih ocena sa originalnim
-val_corr[c("Pre_Flight_Score", "Comfort_Score", "Service_Score"), ]
-```
-
-Izlaz matrice korelacije između zbirnih ocena i pojedinačnih atributa pruža jasnu potvrdu ispravnosti provedenog grupisanja:
-- **`Pre_Flight_Score`** ostvaruje najjače korelacije sa varijablama `Ease_of_Online_booking` ($r \approx 0,69$) i `Departure_Arrival_time_convenient` ($r \approx 0,64$).
-- **`Comfort_Score`** pokazuje izuzetno visoku povezanost sa `Seat_comfort` ($r \approx 0,82$) i `Cleanliness` ($r \approx 0,81$).
-- **`Service_Score`** dominira u odnosu na `Inflight_entertainment` ($r \approx 0,84$) i `Food_and_drink` ($r \approx 0,68$).
-
-Ovi koeficijenti potvrđuju da su kreirane zbirne ocene izuzetno reprezentativne i da verno nose informaciju originalnih unikatnih ocena, čime je opravdano njihovo korišćenje u daljim modelima.
-
-Kao vizuelna potvrda dobijenih statističkih pokazatelja, u nastavku je prikazana matrica korelacija ključnih numeričkih obeležja i zbirnih ocena sa statusom zadovoljstva putnika.
+U nastavku prikazujemo matricu korelacija ključnih numeričkih obeležja, prvobitnih zbirnih ocena iz inženjeringa obeležja i zadovoljstva putnika. Opravdanost samog grupisanja ocena ne proverava se korelacijom zbirne ocene sa njenim sastavnim delovima, jer zbirna ocena po konstrukciji sadrži te delove, već analizom glavnih komponenti u odeljku o strukturi ocena usluga. Odluka o kašnjenjima doneta je u odeljku o multikolinearnosti.
 
 ```{r}
 # Kreiranje data frame-a za vizuelizaciju matrica korelacija ključnih promenljivih
@@ -2276,7 +2257,7 @@ Prema tome, usluge povezane sa zadovoljstvom zavise od svrhe putovanja: kod posl
 
 ## Multikolinearnost: probni logistički model i VIF
 
-Pre izgradnje konačnih modela proveravamo da li među kandidatima za ulazne promenljive postoji multikolinearnost, odnosno da li neke promenljive nose gotovo istu informaciju. Za to koristimo probni logistički model sa svim kandidatima i faktor povećanja varijanse (VIF). VIF pokazuje koliko je varijansa procene koeficijenta povećana zbog povezanosti date promenljive sa ostalim promenljivama. Prema uobičajenoj preporuci, vrednosti iznad 5 ukazuju na umerenu, a iznad 10 na ozbiljnu multikolinearnost. Kod kategorijskih promenljiva sa više od dva nivoa koristi se prilagođena mera, GVIF^(1/(2·Df)), čiji se kvadrat poredi sa istim granicama.
+Pre izgradnje konačnih modela proveravamo da li među kandidatima za ulazne promenljive postoji multikolinearnost, odnosno da li neke promenljive nose gotovo istu informaciju. Za to koristimo probni logistički model sa svim kandidatima i faktor povećanja varijanse (VIF). VIF pokazuje koliko je varijansa procene koeficijenta povećana zbog povezanosti date promenljive sa ostalim promenljivama. Prema uobičajenoj preporuci, vrednosti iznad 5 ukazuju na umerenu, a iznad 10 na ozbiljnu multikolinearnost. Kod kategorijskih promenljivih VIF se računa za svaku indikatorsku (dummy) kolonu posebno, pri čemu su kolone iste promenljive (npr. `ClassEco` i `ClassEco Plus`) po prirodi međusobno povezane, pa njihove umereno više vrednosti treba tumačiti oprezno.
 
 U model ulaze starost i dužina leta u originalnom, numeričkom obliku (njihove kategorije su izvedene iz njih), kašnjenje pri polasku i kašnjenje pri dolasku, kao i četiri nove zbirne ocene. Promenljiva `Delay_Difference` ne ulazi u model jer je tačna linearna kombinacija dva kašnjenja, pa bi izazvala savršenu multikolinearnost. Prvobitne tri zbirne ocene takođe ne ulaze, jer se računaju iz istih ocena kao nove. Ciljna promenljiva se kodira kao 1 za zadovoljne putnike, da bi se pozitivan koeficijent tumačio kao veća šansa za zadovoljstvo.
 
@@ -2298,6 +2279,8 @@ x_matrix <- model.matrix(full_model)[, -1]   # matrica prediktora bez konstantno
 vif_values <- diag(solve(cor(x_matrix)))
 round(sort(vif_values, decreasing = TRUE), 2)
 ```
+Rezultati pokazuju da je multikolinearnost prisutna samo kod dve promenljive: kašnjenje pri dolasku (VIF = 12,58) i kašnjenje pri polasku (VIF = 12,57) imaju vrednosti veće od 10, što potvrđuje da nose gotovo istu informaciju, u skladu sa ranije utvrđenom korelacijom od 0,959. Sve ostale promenljive imaju VIF ispod 2,1, pa među njima ne postoji problem multikolinearnosti. Četiri nove zbirne ocene imaju vrednosti od 1,05 do 1,32, što znači da su međusobno dovoljno nezavisne da se koriste zajedno u modelu. Nešto više vrednosti kod `ClassEco` (2,07) i `Type_of_TravelPersonal Travel` (1,85) u skladu su sa povezanošću klase i svrhe putovanja utvrđenom u prethodnom delu analize, ali su daleko ispod granice od 5.
+
 ### Rešavanje multikolinearnosti kašnjenja
 
 Pošto kašnjenja pri polasku i dolasku ne smeju ući u model zajedno, poredimo tri načina da se informacija o kašnjenju predstavi: (1) kašnjenje pri polasku zajedno sa razlikom `Delay_Difference`, (2) samo kašnjenje pri polasku i (3) samo kašnjenje pri dolasku. Prvi način sadrži istu informaciju kao polazni model sa oba kašnjenja, jer je kašnjenje pri dolasku zbir kašnjenja pri polasku i razlike, ali bez multikolinearnosti. Modele poredimo Akaikeovim informacionim kriterijumom (AIC), kod koga je manja vrednost bolja, a razlika veća od oko 10 uobičajeno se smatra jasnom.
