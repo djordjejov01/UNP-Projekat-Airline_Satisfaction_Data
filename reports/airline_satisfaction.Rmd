@@ -2376,3 +2376,572 @@ Na osnovu rezultata multivarijantne analize definišemo skup promenljivih koji u
 Analiza glavnih komponenti pokazala je da se 13 ocena usluga grupiše u četiri komponente (zajedno objašnjavaju 68,7% varijanse), koje odgovaraju doživljaju u kabini, organizaciji putovanja, osoblju i rukovanju i digitalnim koracima pre leta. Prvobitno intuitivno grupisanje samo je delimično potvrđeno, pa su formirane četiri nove zbirne ocene. Digitalni koraci najviše razdvajaju zadovoljne od nezadovoljnih putnika (razlika prosečnih ocena 1,01), a organizacija putovanja najmanje (0,37). Poređenje po segmentima pokazalo je da se ova slika razlikuje prema svrsi putovanja: kod poslovnih putnika važne su kabina, digitalni koraci i osoblje, a kod putnika na ličnim putovanjima organizacija putovanja i digitalni koraci.
 
 Provera multikolinearnosti pokazala je da je problem samo odnos kašnjenja pri polasku i dolasku (VIF veći od 12), koji se rešava korišćenjem kašnjenja pri polasku zajedno sa razlikom `Delay_Difference`. Interakcija klase i svrhe putovanja je značajna i bez i uz prilagođavanje ostalim promenljivama: klasa je jako povezana sa zadovoljstvom kod poslovnih putovanja (šansa 6,03 puta veća u poslovnoj klasi nego u Eco klasi), a kod ličnih putovanja gotovo nije (1,17). Svi rezultati opisuju povezanost u posmatranom skupu podataka i ne dokazuju uzročno-posledične veze. Izabrane promenljive koriste se u narednoj fazi, izgradnji i evaluaciji modela mašinskog učenja.
+
+# Priprema za modelovanje
+
+U prethodnim poglavljima ispitani su obrasci u podacima i definisan je skup promenljivih koje ulaze u modelovanje. U ovom poglavlju te promenljive objedinjujemo u jedan skup podataka, delimo ga na trening i test skup i pripremamo zajednički postupak evaluacije, kako bi svi modeli bili upoređeni pod istim uslovima.
+
+## Skup promenljivih za modelovanje
+
+Skup za modelovanje sadrži ciljnu promenljivu i sve promenljive koje su u multivarijantnoj analizi zadržane kao kandidati:
+
+- karakteristike putnika i leta: `Gender`, `Customer_Type`, `Type_of_Travel`, `Class`, `Age`, `Flight_Distance`,
+- kašnjenja: `Departure_Delay_in_Minutes` i `Delay_Difference` (par koji čuva informaciju o oba kašnjenja bez multikolinearnosti),
+- 13 pojedinačnih ocena usluga,
+- četiri zbirne ocene dobijene na osnovu PCA (`Cabin_Score`, `Booking_Score`, `Handling_Score`, `Digital_Score`),
+- `Not_Rated_Count`.
+
+Pojedinačne i zbirne ocene nose istu informaciju, pa nikada ne ulaze zajedno u isti model. Umesto da se jedna varijanta bira unapred, u skup su uključene obe, a svaki model koristi samo jednu od njih. Na taj način se rezultati modela sa pojedinačnim i modela sa zbirnim ocenama mogu direktno porediti. Ne koriste se `Arrival_Delay_in_Minutes` (izaziva multikolinearnost sa kašnjenjem pri polasku i razlikom), prvobitne tri zbirne ocene (zamenjene novim) i kategorije izvedene iz postojećih promenljivih (`Age_Group`, `Flight_Distance_Category`, `Class_Ordered`, kategorije kašnjenja).
+
+Ciljna promenljiva ostaje faktor `Satisfaction`, uz numeričku verziju `Satisfied_Num` (1 = zadovoljan) za modele koji zahtevaju numerički ishod. Kod promenljive `Class` kao referentni nivo postavljamo `Eco`, kako bi se koeficijenti u logističkoj regresiji tumačili u odnosu na ekonomsku klasu.
+
+```{r}
+modeling_data <- data %>%
+  transmute(
+    Satisfaction,
+    Satisfied_Num = as.integer(Satisfaction == "Satisfied"),
+    Gender, Customer_Type, Type_of_Travel,
+    Class = relevel(Class, ref = "Eco"),
+    Age, Flight_Distance,
+    Departure_Delay_in_Minutes, Delay_Difference,
+    across(all_of(rating_columns)),
+    Cabin_Score, Booking_Score, Handling_Score, Digital_Score,
+    Not_Rated_Count
+  )
+
+dim(modeling_data)
+sum(is.na(modeling_data))
+levels(modeling_data$Class)
+levels(modeling_data$Satisfaction)
+```
+
+Skup za modelovanje sadrži 129.880 opservacija i 28 promenljivih (ciljnu promenljivu u dva oblika, šest karakteristika putnika i leta, dva kašnjenja, 13 pojedinačnih ocena, četiri zbirne ocene i `Not_Rated_Count`) i nema nedostajućih vrednosti. Referentni nivo promenljive `Class` je `Eco` (nivoi su redom `Eco`, `Business`, `Eco Plus`), a prvi nivo ciljne promenljive je `Satisfied`.
+
+
+## Podela na trening i test skup
+
+Skup delimo na trening skup (80%), na kome se modeli grade i podešavaju, i test skup (20%), koji se koristi samo za konačnu evaluaciju. Podela je stratifikovana prema ciljnoj promenljivoj, što znači da se udeo zadovoljnih putnika (oko 43%) zadržava u oba skupa. Pre podele se postavlja početna vrednost generatora slučajnih brojeva (`set.seed`), kako bi podela bila ponovljiva i ista za sve modele.
+
+Test skup se ne koristi za izbor promenljivih, podešavanje parametara ni poređenje varijanti modela; za to služi unakrsna validacija na trening skupu. Svaki korak pripreme koji se računa iz podataka (npr. zamena nula medijanom ili standardizacija) računa se samo na trening skupu, a zatim se primenjuje na test skup, kako bi se sprečilo curenje podataka (data leakage).
+
+```{r}
+set.seed(123)
+
+modeling_data <- modeling_data %>%
+  mutate(row_id = row_number())
+
+train_data <- modeling_data %>%
+  group_by(Satisfaction) %>%
+  slice_sample(prop = 0.8) %>%
+  ungroup()
+
+test_data <- modeling_data %>%
+  anti_join(train_data, by = "row_id")
+
+# Provera: nijedan putnik nije istovremeno u oba skupa
+sum(train_data$row_id %in% test_data$row_id)
+
+# Identifikator više nije potreban
+modeling_data <- modeling_data %>% select(-row_id)
+train_data    <- train_data %>% select(-row_id)
+test_data     <- test_data %>% select(-row_id)
+
+nrow(train_data)
+nrow(test_data)
+
+bind_rows(
+  Trening = count(train_data, Satisfaction),
+  Test    = count(test_data, Satisfaction),
+  .id = "Skup"
+) %>%
+  group_by(Skup) %>%
+  mutate(Procenat = round(n / sum(n) * 100, 2)) %>%
+  ungroup()
+```
+
+Trening skup sadrži 103.903 putnika, a test skup 25.977. Udeo zadovoljnih putnika iznosi 43,45% u oba skupa, pa stratifikovana podela čuva odnos klasa iz celog skupa. Zbog toga je i najjednostavniji mogući model, koji bi svim putnicima dodelio klasu `Not Satisfied`, tačan u 56,55% slučajeva, što je donja granica koju svaki model mora jasno da premaši.
+
+## Postupak evaluacije modela
+
+Svi modeli se vrednuju na test skupu istim postupkom. Pozitivna klasa je `Satisfied`, a svaki model daje predviđenu verovatnoću da je putnik zadovoljan. Na osnovu praga (podrazumevano 0,5) verovatnoća se pretvara u predviđenu klasu, a zatim se računaju sledeće mere:
+
+- **matrica konfuzije**: broj ispravno i pogrešno klasifikovanih putnika po klasama,
+- **tačnost (accuracy)**: udeo ispravno klasifikovanih putnika,
+- **preciznost (precision)**: od putnika za koje je predviđeno da su zadovoljni, udeo onih koji zaista jesu,
+- **odziv (recall)**: od putnika koji su zaista zadovoljni, udeo onih koje je model prepoznao,
+- **F1**: harmonijska sredina preciznosti i odziva,
+- **AUC**: verovatnoća da model zadovoljnom putniku dodeli višu verovatnoću nego nezadovoljnom, nezavisno od izabranog praga.
+
+Pošto klase nisu potpuno uravnotežene (56,55% naspram 43,45%), tačnost se tumači zajedno sa ostalim merama. AUC se računa iz rangova predviđenih verovatnoća, bez dodatnih paketa.
+
+```{r}
+evaluate_model <- function(actual, prob_satisfied, threshold = 0.5, model_name = "Model") {
+  actual_pos <- actual == "Satisfied"
+  pred_pos   <- prob_satisfied >= threshold
+
+  tp <- sum(pred_pos & actual_pos)
+  fp <- sum(pred_pos & !actual_pos)
+  fn <- sum(!pred_pos & actual_pos)
+  tn <- sum(!pred_pos & !actual_pos)
+
+  precision <- tp / (tp + fp)
+  recall    <- tp / (tp + fn)
+
+  n_pos <- sum(actual_pos)
+  n_neg <- sum(!actual_pos)
+  auc <- (sum(rank(prob_satisfied)[actual_pos]) - n_pos * (n_pos + 1) / 2) /
+    (n_pos * n_neg)
+
+  list(
+    confusion = matrix(
+      c(tp, fn, fp, tn), nrow = 2, byrow = TRUE,
+      dimnames = list(
+        Stvarno    = c("Satisfied", "Not Satisfied"),
+        Predvideno = c("Satisfied", "Not Satisfied")
+      )
+    ),
+    metrics = data.frame(
+      Model     = model_name,
+      Accuracy  = (tp + tn) / (tp + tn + fp + fn),
+      Precision = precision,
+      Recall    = recall,
+      F1        = 2 * precision * recall / (precision + recall),
+      AUC       = auc
+    )
+  )
+}
+```
+
+Ispravnost funkcije proveravamo na dva ekstremna slučaja: savršen model, koji zna tačan ishod, i slučajan model, koji dodeljuje nasumične verovatnoće.
+
+```{r}
+set.seed(1)
+
+savrsen  <- evaluate_model(
+  test_data$Satisfaction,
+  as.numeric(test_data$Satisfaction == "Satisfied"),
+  model_name = "Savršen"
+)
+slucajan <- evaluate_model(
+  test_data$Satisfaction,
+  runif(nrow(test_data)),
+  model_name = "Slučajan"
+)
+
+bind_rows(savrsen$metrics, slucajan$metrics) %>%
+  mutate(across(where(is.numeric), ~ round(., 3)))
+```
+
+Savršen model, koji zna tačan ishod, ima sve mere jednake 1, dok slučajan model ima tačnost 0,506, preciznost 0,44 (približno udeo zadovoljnih putnika u test skupu), odziv 0,502 i AUC 0,506, odnosno vrednosti oko slučajnog nivoa. Time je potvrđeno da funkcija ispravno računa sve mere. Model je koristan samo ako ima AUC znatno iznad 0,5 i tačnost iznad 56,55%, koliko bi iznosila tačnost modela koji svim putnicima dodeljuje klasu `Not Satisfied`.
+
+## Obrada ocena sa vrednošću 0
+
+Vrednost 0 u ocenama usluga označava da usluga nije ocenjena, a ne najnižu ocenu. Modeli zasnovani na stablima odlučivanja mogu da koriste vrednost 0 kao posebnu vrednost, pa za njih ostavljamo originalne ocene. Linearni modeli, kao što je logistička regresija, tretiraju ocene kao brojeve na skali i vrednost 0 bi doživeli kao ocenu nižu od 1, što nije tačno. Zato za takve modele pravimo drugu verziju skupa u kojoj se vrednost 0 zamenjuje medijanom ocena te usluge, pri čemu se medijana računa samo na trening skupu, bez nula, a zatim primenjuje i na test skup. Promenljiva `Not_Rated_Count` ostaje u oba skupa i čuva informaciju o tome koliko je usluga bilo neocenjeno. Zbirne ocene već izostavljaju nule iz proseka, pa se ne menjaju.
+
+```{r}
+# Medijana ocene svake usluge na trening skupu, bez nula
+rating_medians <- sapply(
+  train_data[rating_columns],
+  function(x) median(x[x != 0])
+)
+
+zero_table <- data.frame(
+  Usluga           = rating_columns,
+  Nula_trening     = colSums(train_data[rating_columns] == 0),
+  Nula_test        = colSums(test_data[rating_columns] == 0),
+  Medijana_trening = rating_medians
+)
+rownames(zero_table) <- NULL
+zero_table
+```
+
+```{r}
+replace_zeros <- function(df) {
+  for (col in rating_columns) {
+    df[[col]][df[[col]] == 0] <- rating_medians[[col]]
+  }
+  df
+}
+
+train_lr <- replace_zeros(train_data)
+test_lr  <- replace_zeros(test_data)
+
+# Provera: u verziji za linearne modele ne sme da ostane nijedna nula
+sum(train_lr[rating_columns] == 0)
+sum(test_lr[rating_columns] == 0)
+```
+Vrednost 0 se u trening skupu najčešće javlja kod ocena pogodnosti vremena polaska i dolaska (5.332), online rezervacije (4.574), WiFi usluge (3.177) i online ukrcavanja (2.447), dok je kod ostalih usluga ima manje od 500, a kod rukovanja prtljagom nijednom. Zbir nula u trening i test skupu poklapa se sa brojevima iz eksplorativne analize (npr. 3.177 + 739 = 3.916 za WiFi), a nule su između skupova raspoređene približno srazmerno njihovoj veličini (oko 80% i 20%). Medijane ocena bez nula iznose 3 za WiFi, pogodnost vremena, online rezervaciju, lokaciju gejta, hranu i piće, prijavu na let i čistoću, a 4 za ostale usluge. Nakon zamene, u verziji skupa za linearne modele nijedna nula nije ostala ni u trening ni u test skupu.
+
+## Pregled pripremljenih skupova
+
+Za modelovanje su pripremljena dva para skupova:
+
+| Objekat | Sadržaj | Namenjen modelima |
+|---|---|---|
+| `train_data`, `test_data` | originalne ocene usluga (vrednost 0 = neocenjeno) | stabla odlučivanja, random forest, boosting |
+| `train_lr`, `test_lr` | nule u ocenama zamenjene medijanom iz trening skupa | logistička regresija i drugi linearni modeli |
+
+Oba para sadrže iste putnike u istom rasporedu i razlikuju se samo po ocenama usluga. Svaki model koristi jednu od tri varijante skupa promenljivih: pojedinačne ocene, zbirne ocene ili samo karakteristike putnika i leta (bez ocena usluga). Poslednja varijanta pokazuje u kojoj meri se zadovoljstvo može predvideti i bez ocena, koje se prikupljaju u istoj anketi kao i zadovoljstvo. Rezultati svih modela upisuju se u zajedničku tabelu `model_results`, koja se na kraju koristi za poređenje.
+
+```{r}
+model_results <- data.frame()
+```
+
+## Skupovi promenljivih po varijantama
+
+Pošto svi modeli koriste iste varijante skupa promenljivih, one se definišu na jednom mestu, kao spiskovi imena kolona. Tako se eventualna izmena (npr. izbacivanje jedne promenljive) sprovodi na jednom mestu i važi za sve modele.
+
+```{r}
+person_vars <- c("Gender", "Customer_Type", "Type_of_Travel", "Class",
+                 "Age", "Flight_Distance",
+                 "Departure_Delay_in_Minutes", "Delay_Difference")
+
+# Varijanta 1: pojedinačne ocene usluga
+vars_individual <- c(person_vars, rating_columns, "Not_Rated_Count")
+
+# Varijanta 2: zbirne ocene usluga
+vars_scores <- c(person_vars, "Cabin_Score", "Booking_Score",
+                 "Handling_Score", "Digital_Score", "Not_Rated_Count")
+
+# Varijanta 3: bez ocena usluga
+vars_no_ratings <- person_vars
+
+# Provera: broj promenljivih po varijanti i prisustvo svih kolona u skupu
+sapply(
+  list(pojedinacne = vars_individual, zbirne = vars_scores, bez_ocena = vars_no_ratings),
+  length
+)
+all(c(vars_individual, vars_scores) %in% names(train_lr))
+```
+
+Svaki model koristi jednu od ove tri varijante.
+
+# Logistička regresija
+
+Logistička regresija modeluje logaritam šanse (log-odds) da je putnik zadovoljan kao linearnu kombinaciju ulaznih promenljivih. Njeni koeficijenti se mogu tumačiti kao promena šanse za zadovoljstvo, što je čini pogodnom za objašnjenje faktora koji utiču na zadovoljstvo, pa je koristimo kao osnovni model. Model se gradi na trening skupu u verziji u kojoj su nule u ocenama zamenjene medijanom (`train_lr`), jer logistička regresija ocene tretira kao brojeve na skali.
+
+## Osnovni model
+
+Osnovni model koristi varijantu skupa sa zbirnim ocenama usluga (`vars_scores`) i ne sadrži interakcije ni nelinearne članove. Njegova svrha je da pokaže koje promenljive su povezane sa zadovoljstvom kada se sve posmatraju zajedno, i da posluži kao osnova za poređenje poboljšanih modela.
+
+```{r}
+formula_scores <- as.formula(
+  paste("Satisfied_Num ~", paste(vars_scores, collapse = " + "))
+)
+formula_scores
+
+lr_scores <- glm(formula_scores, data = train_lr, family = binomial)
+
+round(coef(summary(lr_scores)), 4)
+
+lr_scores$converged
+AIC(lr_scores)
+
+# McFaddenov pseudo R2
+1 - lr_scores$deviance / lr_scores$null.deviance
+```
+Model je konvergirao (AIC = 63422,14), a McFaddenov pseudo R² iznosi 0,554, što je visoka vrednost (vrednosti od 0,2 do 0,4 se obično smatraju odličnim prilagođavanjem), pa promenljive zajedno dobro objašnjavaju zadovoljstvo putnika na trening skupu. Svi koeficijenti su statistički značajni na nivou 0,05, većina uz p < 0,001, a granično su značajni pol (p = 0,015) i dužina leta (p = 0,026), što je u skladu sa njihovom ranije utvrđenom slabom povezanošću sa zadovoljstvom.
+
+Predznaci koeficijenata su logični. Veću šansu za zadovoljstvo imaju lojalni korisnici (2,57) i putnici u poslovnoj klasi u odnosu na Eco klasu (0,51), a sve četiri zbirne ocene imaju pozitivne koeficijente, najveći kod digitalnih koraka (1,19) i osoblja i rukovanja (0,86). Manju šansu imaju putnici na ličnim putovanjima (-3,58), putnici u klasi Eco Plus u odnosu na Eco (-0,14), stariji putnici i putnici sa dužim kašnjenjem. Efekat klase je znatno manji nego što je pokazivala bivarijantna analiza, pa se razlika između klasa može objasniti svrhom putovanja i ocenama usluga. Promenljiva `Not_Rated_Count` ima neočekivano veliki pozitivan koeficijent (1,06), što ćemo detaljnije proveriti, jer eksplorativna analiza pokazuje da se njena veza sa zadovoljstvom ne menja linearno. Koeficijenti su izraženi u jedinicama svojih promenljivih (npr. dužina leta je u miljama, pa je njen koeficijent na toj skali gotovo nula), zbog čega ih u narednom koraku pretvaramo u šanse za razumljive jedinice.
+
+## Šanse (odds ratio)
+
+Koeficijenti logističke regresije su promene logaritma šanse. Eksponencirani koeficijent (odds ratio, OR) pokazuje za koliko se puta menja šansa za zadovoljstvo kada se promenljiva poveća za jednu jedinicu, odnosno kada se sa referentne pređe na datu kategoriju, uz nepromenjene ostale promenljive. OR veći od 1 znači veću šansu za zadovoljstvo, a manji od 1 manju. Šansa nije isto što i verovatnoća: OR od 2 znači dvostruko veću šansu, a ne dvostruko veću verovatnoću. Referentne kategorije su žene, dislojalni korisnici, poslovna putovanja i Eco klasa. Jedinice numeričkih promenljivih izabrane su tako da budu razumljive (starost 10 godina, dužina leta 1000 milja, kašnjenja 10 minuta), a intervali poverenja od 95% računaju se na osnovu standardnih grešaka (Waldov interval).
+
+```{r}
+koef <- coef(lr_scores)
+ci   <- confint.default(lr_scores)
+
+# Jedinica za tumačenje svake promenljive
+jedinica_broj <- rep(1, length(koef))
+names(jedinica_broj) <- names(koef)
+jedinica_broj["Age"] <- 10
+jedinica_broj["Flight_Distance"] <- 1000
+jedinica_broj["Departure_Delay_in_Minutes"] <- 10
+jedinica_broj["Delay_Difference"] <- 10
+
+or_table <- data.frame(
+  Promenljiva = names(koef),
+  OR          = exp(koef * jedinica_broj),
+  Donja_95    = exp(ci[, 1] * jedinica_broj),
+  Gornja_95   = exp(ci[, 2] * jedinica_broj),
+  p_vrednost  = coef(summary(lr_scores))[, 4],
+  row.names   = NULL
+) %>%
+  filter(Promenljiva != "(Intercept)") %>%
+  mutate(
+    Jedinica = case_when(
+      Promenljiva == "Age" ~ "10 godina",
+      Promenljiva == "Flight_Distance" ~ "1000 milja",
+      Promenljiva %in% c("Departure_Delay_in_Minutes", "Delay_Difference") ~ "10 minuta",
+      grepl("Score", Promenljiva) ~ "1 poen ocene",
+      Promenljiva == "Not_Rated_Count" ~ "1 neocenjena usluga",
+      TRUE ~ "u odnosu na referentnu kategoriju"
+    ),
+    across(c(OR, Donja_95, Gornja_95), ~ round(., 3)),
+    p_vrednost = ifelse(p_vrednost < 0.001, "<0.001", as.character(round(p_vrednost, 3)))
+  )
+
+or_table
+```
+Šanse za zadovoljstvo najviše povećavaju lojalnost korisnika i ocene usluga. Lojalni korisnici imaju 13,04 puta veću šansu od dislojalnih (95% interval od 12,26 do 13,87). Za svaki poen više u oceni digitalnih koraka šansa se množi sa 3,28, u oceni osoblja i rukovanja sa 2,36, a u oceni kabine i organizacije putovanja sa po oko 1,55. Putnici na ličnim putovanjima imaju oko 36 puta manju šansu (OR = 0,028) nego putnici na poslovnim putovanjima, uz iste ostale karakteristike. Putnici u poslovnoj klasi imaju 1,67 puta veću šansu nego u Eco klasi, a u klasi Eco Plus 0,87 puta (13% manju). Efekat klase je znatno manji nego što je pokazivala bivarijantna analiza, pa je veći deo te razlike delimično posledica svrhe putovanja, tipa korisnika i ocena usluga.
+
+Starost, dužina leta i pol imaju male efekte. Na svakih 10 godina starosti šansa je za 4,7% manja (OR = 0,953), na svakih 1000 milja dužine leta za 2,7% veća (OR = 1,027, uz donju granicu intervala 1,003), a muškarci imaju 5,1% veću šansu od žena (interval od 1,010 do 1,093). Pošto model sadrži kašnjenje pri polasku i razliku između dolaska i polaska, njihovi odnosi šansi tumače se zajedno: za svakih dodatnih 10 minuta koje je let izgubio tokom puta šansa je 0,919 puta manja, a za kašnjenje koje se održava od polaska do dolaska (10 minuta kasnije i pri polasku i pri dolasku) 0,952 puta manja. Intervali poverenja su uski zbog velikog broja opservacija, pa statistička značajnost ne znači praktičnu važnost.
+
+Svaka dodatna neocenjena usluga povezana je sa 2,89 puta većom šansom za zadovoljstvo, što je veliki efekat. Pošto se eksplorativnom analizom pokazalo da se veza ove promenljive sa zadovoljstvom ne menja linearno, ovu procenu treba tumačiti sa oprezom. Odnosi šansi opisuju povezanost u posmatranom skupu i ne dokazuju uzročno-posledične veze.
+
+## Poboljšanja osnovnog modela
+
+Osnovni model pretpostavlja da je veza svake promenljive sa logaritmom šanse linearna i da se efekti ne razlikuju između grupa putnika. Ranije analize ukazuju na četiri mesta gde ta pretpostavka možda ne važi: starost (veza oblika slova U), kašnjenje (izrazito asimetrična raspodela), broj neocenjenih usluga (nelinearna veza) i interakcije (klasa i svrha putovanja, kao i svrha putovanja i ocene usluga). Svaki kandidat dodajemo osnovnom modelu posebno i poredimo ga sa njim pomoću Akaikeovog informacionog kriterijuma (AIC), koji nagrađuje bolje prilagođavanje, a kažnjava dodatne parametre. Manji AIC je bolji, a razlika veća od oko 10 uobičajeno se smatra jasnom. Poređenje se vrši isključivo na trening skupu.
+
+```{r}
+f_base <- formula(lr_scores)
+fit_lr <- function(f) glm(f, data = train_lr, family = binomial)
+
+lr_age2   <- fit_lr(update(f_base, . ~ . + I(Age^2)))
+lr_logdep <- fit_lr(update(f_base, . ~ . - Departure_Delay_in_Minutes +
+                             log1p(Departure_Delay_in_Minutes)))
+lr_nrc    <- fit_lr(update(f_base, . ~ . - Not_Rated_Count +
+                             factor(Not_Rated_Count)))
+lr_int    <- fit_lr(update(f_base, . ~ . + Class:Type_of_Travel))
+lr_tscore <- fit_lr(update(f_base, . ~ . + Type_of_Travel:Cabin_Score +
+                             Type_of_Travel:Booking_Score +
+                             Type_of_Travel:Handling_Score +
+                             Type_of_Travel:Digital_Score))
+
+modeli <- list(
+  "Osnovni model"                   = lr_scores,
+  "+ kvadrat starosti"              = lr_age2,
+  "log(1 + kašnjenje polaska)"      = lr_logdep,
+  "Not_Rated_Count kao faktor"      = lr_nrc,
+  "+ Class x Type_of_Travel"        = lr_int,
+  "+ Type_of_Travel x zbirne ocene" = lr_tscore
+)
+
+poredjenje <- data.frame(
+  Model      = names(modeli),
+  Parametara = sapply(modeli, function(m) length(coef(m))),
+  AIC        = sapply(modeli, AIC)
+)
+poredjenje$Razlika_AIC <- round(poredjenje$AIC - poredjenje$AIC[1], 1)
+poredjenje$AIC <- round(poredjenje$AIC, 1)
+rownames(poredjenje) <- NULL
+poredjenje
+```
+
+Svaki od pet dodataka smanjuje AIC u odnosu na osnovni model (63422,1), pa su svi jasno opravdani. Daleko najveće poboljšanje daju interakcije svrhe putovanja sa zbirnim ocenama (razlika od -6725,6 uz četiri dodatna parametra), što potvrđuje nalaz iz dela o segmentima da se važnost usluga razlikuje između poslovnih i ličnih putovanja: ocene usluga ne utiču na zadovoljstvo na isti način kod obe vrste putnika. Slede broj neocenjenih usluga predstavljen kao faktor umesto kao brojčana promenljiva (-756,3), logaritamska transformacija kašnjenja pri polasku (-310,7) i kvadratni član starosti (-93,0), što potvrđuje da veze ovih promenljivih sa zadovoljstvom nisu linearne. Interakcija klase i svrhe putovanja daje najmanje poboljšanje (-28,8). Moguće je da deo njenog efekta prelazi na interakcije svrhe putovanja sa ocenama usluga, pa je u narednom koraku proveravamo u modelu u kome su svi dodaci zajedno.
+
+## Kombinovani model
+
+Dodatke koji su pojedinačno smanjili AIC spajamo u jedan model. Pošto se njihovi efekti mogu preklapati (na primer, interakcija klase i svrhe putovanja može postati nepotrebna kada se uvedu interakcije svrhe putovanja sa ocenama), iz kombinovanog modela zatim izbacujemo jedan po jedan dodatak i posmatramo promenu AIC-a. Ako se AIC bez dodatka poveća za više od oko 10, dodatak ostaje u modelu. Dodatno proveravamo i interakciju tipa korisnika i svrhe putovanja, jer se u kategorijskoj analizi pokazalo da lojalnost različito utiče na zadovoljstvo kod poslovnih i ličnih putovanja.
+
+```{r}
+f_comb <- update(
+  f_base,
+  . ~ . + I(Age^2)
+    - Departure_Delay_in_Minutes + log1p(Departure_Delay_in_Minutes)
+    - Not_Rated_Count + factor(Not_Rated_Count)
+    + Class:Type_of_Travel
+    + Type_of_Travel:Cabin_Score + Type_of_Travel:Booking_Score
+    + Type_of_Travel:Handling_Score + Type_of_Travel:Digital_Score
+)
+lr_comb <- fit_lr(f_comb)
+lr_comb$converged
+
+provere <- list(
+  "Kombinovani model" = lr_comb,
+  "- kvadrat starosti" =
+    fit_lr(update(f_comb, . ~ . - I(Age^2))),
+  "- log kašnjenja (kašnjenje linearno)" =
+    fit_lr(update(f_comb, . ~ . - log1p(Departure_Delay_in_Minutes) +
+                    Departure_Delay_in_Minutes)),
+  "- faktor Not_Rated_Count (linearan član)" =
+    fit_lr(update(f_comb, . ~ . - factor(Not_Rated_Count) + Not_Rated_Count)),
+  "- Class x Type_of_Travel" =
+    fit_lr(update(f_comb, . ~ . - Class:Type_of_Travel)),
+  "- Type_of_Travel x zbirne ocene" =
+    fit_lr(update(f_comb, . ~ . - Type_of_Travel:Cabin_Score -
+                    Type_of_Travel:Booking_Score - Type_of_Travel:Handling_Score -
+                    Type_of_Travel:Digital_Score)),
+  "+ Customer_Type x Type_of_Travel" =
+    fit_lr(update(f_comb, . ~ . + Customer_Type:Type_of_Travel))
+)
+
+provere_tabela <- data.frame(
+  Model      = names(provere),
+  Parametara = sapply(provere, function(m) length(coef(m))),
+  AIC        = sapply(provere, AIC)
+)
+provere_tabela$Razlika_AIC <- round(provere_tabela$AIC - provere_tabela$AIC[1], 1)
+provere_tabela$AIC <- round(provere_tabela$AIC, 1)
+rownames(provere_tabela) <- NULL
+provere_tabela
+```
+
+Kombinovani model sadrži sve dodatke koji su pojedinačno smanjili AIC (55800,9). Izbacivanjem svakog od njih AIC raste, pa su svi i dalje potrebni: kvadrat starosti za 84,3, logaritam kašnjenja za 274,8, faktor `Not_Rated_Count` za 529,6 i interakcije svrhe putovanja sa zbirnim ocenama za 6422,5. Interakcija klase i svrhe putovanja najmanje doprinosi (14,2, tek iznad granice od oko 10), jer se njen pojedinačni doprinos od 28,8 smanjio kada su uvedene interakcije svrhe putovanja sa ocenama usluga. Dodatna interakcija tipa korisnika i svrhe putovanja smanjuje AIC za 97,6, što potvrđuje nalaz iz kategorijske analize da lojalnost različito utiče na zadovoljstvo kod poslovnih i ličnih putovanja, pa je uključujemo u konačni model.
+
+## Konačna specifikacija modela
+
+Konačni model sadrži sve dodatke iz kombinovanog modela i interakciju tipa korisnika i svrhe putovanja. Pošto se uvođenjem nove interakcije može promeniti potreba za interakcijom klase i svrhe putovanja, to proveravamo ponovo.
+
+```{r}
+f_final  <- update(f_comb, . ~ . + Customer_Type:Type_of_Travel)
+lr_final <- fit_lr(f_final)
+lr_final$converged
+
+lr_final_bez_klase <- fit_lr(update(f_final, . ~ . - Class:Type_of_Travel))
+
+data.frame(
+  Model       = c("Konačni model", "- Class x Type_of_Travel"),
+  Parametara  = c(length(coef(lr_final)), length(coef(lr_final_bez_klase))),
+  AIC         = round(c(AIC(lr_final), AIC(lr_final_bez_klase)), 1),
+  McFadden_R2 = round(c(
+    1 - lr_final$deviance / lr_final$null.deviance,
+    1 - lr_final_bez_klase$deviance / lr_final_bez_klase$null.deviance
+  ), 3)
+)
+```
+
+## Varijante skupa promenljivih
+
+Konačna specifikacija primenjuje se na tri varijante skupa promenljivih definisane ranije: sa zbirnim ocenama usluga, sa 13 pojedinačnih ocena i bez ocena usluga. Zajednički deo svih varijanti čine karakteristike putnika i leta sa istim transformacijama (kvadrat starosti, logaritam kašnjenja pri polasku i interakcije klase i tipa korisnika sa svrhom putovanja). Kod varijante sa pojedinačnim ocenama interakcija sa svrhom putovanja dodaje se za svaku ocenu. Varijanta bez ocena ne sadrži ni `Not_Rated_Count`, jer ta promenljiva potiče iz ocena usluga. Dodajemo i četvrtu varijantu, zbirne ocene bez `Not_Rated_Count`, jer je ta promenljiva imala neočekivano jak efekat, pa proveravamo koliko se model oslanja na nju.
+
+```{r}
+person_terms <- c(
+  "Gender", "Customer_Type", "Type_of_Travel", "Class",
+  "Age", "I(Age^2)", "Flight_Distance",
+  "log1p(Departure_Delay_in_Minutes)", "Delay_Difference",
+  "Class:Type_of_Travel", "Customer_Type:Type_of_Travel"
+)
+
+make_formula <- function(ratings, include_nrc = TRUE) {
+  terms_vec <- person_terms
+  if (length(ratings) > 0) {
+    terms_vec <- c(terms_vec, ratings, paste0("Type_of_Travel:", ratings))
+  }
+  if (include_nrc) terms_vec <- c(terms_vec, "factor(Not_Rated_Count)")
+  as.formula(paste("Satisfied_Num ~", paste(terms_vec, collapse = " + ")))
+}
+
+score_cols <- c("Cabin_Score", "Booking_Score", "Handling_Score", "Digital_Score")
+
+formule <- list(
+  "zbirne ocene"                     = make_formula(score_cols),
+  "pojedinačne ocene"                = make_formula(rating_columns),
+  "bez ocena usluga"                 = make_formula(character(0), include_nrc = FALSE),
+  "zbirne ocene bez Not_Rated_Count" = make_formula(score_cols, include_nrc = FALSE)
+)
+
+lr_modeli <- lapply(formule, fit_lr)
+sapply(lr_modeli, function(m) m$converged)
+```
+
+```{r}
+varijante_tabela <- data.frame(
+  Varijanta   = names(lr_modeli),
+  Parametara  = sapply(lr_modeli, function(m) length(coef(m))),
+  AIC         = round(sapply(lr_modeli, AIC), 1),
+  McFadden_R2 = round(sapply(lr_modeli, function(m) 1 - m$deviance / m$null.deviance), 3),
+  row.names   = NULL
+)
+varijante_tabela
+
+# Provera: varijanta sa zbirnim ocenama mora imati isti AIC kao konačni model
+round(c(AIC(lr_modeli[["zbirne ocene"]]), AIC(lr_final)), 1)
+```
+## Evaluacija na test skupu
+
+Test skup se koristi tek sada, jednom, za sve četiri varijante. Specifikacija modela određena je isključivo na trening skupu, pa test skup služi samo za nepristrasnu procenu kvaliteta predviđanja. Prag za klasifikaciju je 0,5. Najjednostavniji model, koji bi svim putnicima dodelio klasu `Not Satisfied`, ima tačnost 56,55%.
+
+```{r}
+test_prob <- lapply(lr_modeli, predict, newdata = test_lr, type = "response")
+
+lr_rezultati <- bind_rows(lapply(names(lr_modeli), function(nm) {
+  evaluate_model(test_lr$Satisfaction, test_prob[[nm]],
+                 model_name = paste("Logistička regresija -", nm))$metrics
+}))
+
+# Ako se chunk pokrene ponovo, stari redovi se zamenjuju novim
+if (nrow(model_results) > 0) {
+  model_results <- filter(model_results, !grepl("^Logistička regresija", Model))
+}
+model_results <- bind_rows(model_results, lr_rezultati)
+
+lr_rezultati %>% mutate(across(where(is.numeric), ~ round(., 3)))
+```
+
+```{r}
+# Matrica konfuzije za varijantu sa zbirnim ocenama
+evaluate_model(test_lr$Satisfaction, test_prob[["zbirne ocene"]])$confusion
+```
+## Tumačenje konačnog modela
+
+Pošto konačni model sadrži interakcije sa svrhom putovanja, jedan odnos šansi ne važi za sve putnike. Zato šanse za zadovoljstvo prikazujemo posebno za poslovna i lična putovanja. Za lična putovanja koeficijent glavnog efekta sabira se sa koeficijentom interakcije, a interval poverenja od 95% računa se iz kovarijacione matrice koeficijenata. Efekat se odnosi na varijantu sa zbirnim ocenama, a za ocene je izražen po jednom poenu.
+
+```{r}
+b <- coef(lr_final)
+V <- vcov(lr_final)
+
+or_ci <- function(terms) {
+  est <- sum(b[terms])
+  se  <- sqrt(sum(V[terms, terms]))
+  round(exp(c(OR = est, Donja_95 = est - 1.96 * se, Gornja_95 = est + 1.96 * se)), 2)
+}
+
+inter_name <- function(x) {
+  nm <- grep(":", names(b), value = TRUE, fixed = TRUE)
+  nm[grepl("Type_of_TravelPersonal Travel", nm, fixed = TRUE) & grepl(x, nm, fixed = TRUE)]
+}
+
+efekat <- function(main_term, opis) {
+  inter <- inter_name(main_term)
+  stopifnot(length(inter) == 1)
+  rbind(
+    data.frame(Promenljiva = opis, Putovanje = "Business Travel", t(or_ci(main_term))),
+    data.frame(Promenljiva = opis, Putovanje = "Personal Travel", t(or_ci(c(main_term, inter))))
+  )
+}
+
+or_po_putovanju <- bind_rows(
+  efekat("Customer_TypeLoyal Customer", "Lojalni naspram dislojalnih korisnika"),
+  efekat("ClassBusiness",               "Poslovna naspram Eco klase"),
+  efekat("ClassEco Plus",               "Eco Plus naspram Eco klase"),
+  efekat("Cabin_Score",                 "Cabin_Score (kabina)"),
+  efekat("Booking_Score",               "Booking_Score (organizacija)"),
+  efekat("Handling_Score",              "Handling_Score (osoblje i rukovanje)"),
+  efekat("Digital_Score",               "Digital_Score (digitalni koraci)")
+)
+or_po_putovanju
+```
+## Važnost promenljivih
+
+Važnost svake grupe promenljivih procenjujemo tako što je (zajedno sa svim njenim interakcijama) izbacimo iz konačnog modela i posmatramo porast AIC-a. Što je porast veći, to je grupa važnija za objašnjenje zadovoljstva. Svrha putovanja se izbacuje zajedno sa svim interakcijama u kojima učestvuje, pa njen porast obuhvata i činjenicu da se uticaj ocena usluga razlikuje između poslovnih i ličnih putovanja.
+
+```{r}
+term_labels <- attr(terms(f_final), "term.labels")
+
+grupe <- list(
+  "Pol"                                  = "Gender",
+  "Tip korisnika"                        = "Customer_Type",
+  "Svrha putovanja"                      = "Type_of_Travel",
+  "Klasa leta"                           = "Class",
+  "Starost"                              = "Age",
+  "Dužina leta"                          = "Flight_Distance",
+  "Kašnjenje (polazak i razlika)"        = c("Departure_Delay_in_Minutes", "Delay_Difference"),
+  "Cabin_Score (kabina)"                 = "Cabin_Score",
+  "Booking_Score (organizacija)"         = "Booking_Score",
+  "Handling_Score (osoblje i rukovanje)" = "Handling_Score",
+  "Digital_Score (digitalni koraci)"     = "Digital_Score",
+  "Broj neocenjenih usluga"              = "Not_Rated_Count"
+)
+
+vaznost <- bind_rows(lapply(names(grupe), function(g) {
+  uzorak <- paste(grupe[[g]], collapse = "|")
+  ostalo <- term_labels[!grepl(uzorak, term_labels)]
+  f_red  <- as.formula(paste("Satisfied_Num ~", paste(ostalo, collapse = " + ")))
+  data.frame(Grupa = g, Porast_AIC = round(AIC(fit_lr(f_red)) - AIC(lr_final), 0))
+})) %>%
+  arrange(desc(Porast_AIC))
+
+vaznost
+```
