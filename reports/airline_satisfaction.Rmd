@@ -2945,3 +2945,104 @@ vaznost <- bind_rows(lapply(names(grupe), function(g) {
 
 vaznost
 ```
+
+
+
+
+# Drvo odlučivanja i random forest
+
+## Provera pripremljenih podataka
+
+```{r}
+library(rpart)
+library(rpart.plot)
+
+stopifnot(
+  exists("train_data"),
+  exists("test_data"),
+  exists("vars_scores"),
+  exists("evaluate_model")
+)
+
+dim(train_data)
+dim(test_data)
+length(vars_scores)
+names(train_data)[names(train_data) %in% vars_scores]
+```
+
+## Osnovno drvo odlučivanja
+
+Drvo odlučivanja je klasifikacioni model koji sukcesivnim podelama podataka formira pravila za predviđanje ciljne promenljive. Svaka podela bira promenljivu i prag koji najbolje razdvajaju zadovoljne i nezadovoljne putnike.
+
+U ovom koraku formiramo osnovno drvo odlučivanja. Model se trenira na trening skupu, dok će se njegova uspešnost proceniti tek na test skupu. Koristimo zbirne ocene usluga (`Cabin_Score`, `Booking_Score`, `Handling_Score` i `Digital_Score`), zajedno sa osnovnim karakteristikama putnika i leta.
+
+
+```{r}
+tree_train <- train_data %>%
+  select(Satisfaction, all_of(vars_scores))
+
+tree_test <- test_data %>%
+  select(Satisfaction, all_of(vars_scores))
+
+tree_model <- rpart(
+  Satisfaction ~ .,
+  data = tree_train,
+  method = "class",
+  control = rpart.control(
+    cp = 0.01,
+    minbucket = 20,
+    xval = 5
+  )
+)
+
+tree_model
+printcp(tree_model)
+```
+
+
+Osnovno stablo odlučivanja prvo deli putnike prema klasi leta. Putnici u poslovnoj klasi imaju veći udeo zadovoljnih putnika, dok su putnici u klasama `Eco` i `Eco Plus` uglavnom nezadovoljni. Kod poslovne klase sledeća važna promenljiva je `Digital_Score`, dok se kod ekonomskih klasa izdvajaju `Booking_Score`, `Not_Rated_Count`, `Type_of_Travel`, `Customer_Type` i `Cabin_Score`.
+
+Unakrsna validacija pokazuje da se relativna greška smanjuje sa povećanjem složenosti stabla. Najmanja procenjena greška dobija se za stablo sa 9 podela, pri vrednosti parametra složenosti `cp = 0,01`. Ovaj rezultat predstavlja osnovu za prikaz i evaluaciju osnovnog stabla na test skupu.
+
+## Grafički prikaz osnovnog stabla
+
+```{r}
+rpart.plot(
+  tree_model,
+  type = 4,
+  extra = 104,
+  fallen.leaves = TRUE,
+  box.palette = "GnBu",
+  shadow.col = "gray",
+  main = "Osnovno drvo odlučivanja"
+)
+```
+
+## Evaluacija osnovnog stabla na test skupu
+
+```{r decision-tree-evaluation}
+tree_prob <- predict(
+  tree_model,
+  newdata = tree_test,
+  type = "prob"
+)[, "Satisfied"]
+
+tree_evaluation <- evaluate_model(
+  actual = tree_test$Satisfaction,
+  prob_satisfied = tree_prob,
+  model_name = "Drvo odlučivanja - osnovno"
+)
+
+tree_evaluation$metrics
+tree_evaluation$confusion
+```
+
+Osnovno drvo odlučivanja ostvarilo je tačnost od 86,07% na test skupu. Precision iznosi 80,21%, što znači da je među putnicima koje je model označio kao zadovoljne približno 80% zaista zadovoljno. Recall iznosi 90,18%, što pokazuje da model uspešno prepoznaje većinu zadovoljnih putnika. F1 mera iznosi 84,91%, dok AUC od 0,901 ukazuje na veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
+
+Matrica konfuzije pokazuje da je model pravilno klasifikovao 10.178 zadovoljnih i 12.180 nezadovoljnih putnika. Pogrešno je klasifikovano 1.108 zadovoljnih putnika kao nezadovoljno i 2.511 nezadovoljnih putnika kao zadovoljno.
+
+Najvažnija početna podela u stablu zasnovana je na promenljivoj `Class`. Kod putnika u poslovnoj klasi važnu ulogu imaju `Digital_Score` i `Handling_Score`, dok se kod putnika u klasama `Eco` i `Eco Plus` izdvajaju `Booking_Score`, `Not_Rated_Count`, `Type_of_Travel`, `Customer_Type` i `Cabin_Score`. Ovo pokazuje da se faktori povezani sa zadovoljstvom razlikuju između različitih grupa putnika.
+
+
+
+
