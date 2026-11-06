@@ -1,10 +1,10 @@
 ---
 title: "Airline satisfaction data"
 output:
-  html_document: default
-  pdf_document: default
   word_document: 
     reference_docx: template.docx
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -18,6 +18,9 @@ knitr::opts_chunk$set(
 )
 
 library(tidyverse)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
 ```
 
 
@@ -2945,3 +2948,406 @@ vaznost <- bind_rows(lapply(names(grupe), function(g) {
 
 vaznost
 ```
+
+
+
+
+# Drvo odlučivanja i random forest
+
+
+## Osnovno drvo odlučivanja
+
+Drvo odlučivanja je klasifikacioni model koji sukcesivnim podelama podataka formira pravila za predviđanje ciljne promenljive. Svaka podela bira promenljivu i prag koji najbolje razdvajaju zadovoljne i nezadovoljne putnike.
+
+U ovom koraku formiramo osnovno drvo odlučivanja. Model se trenira na trening skupu, dok će se njegova uspešnost proceniti tek na test skupu. Koristimo zbirne ocene usluga (`Cabin_Score`, `Booking_Score`, `Handling_Score` i `Digital_Score`), zajedno sa osnovnim karakteristikama putnika i leta.
+
+
+```{r}
+tree_train <- train_data %>%
+  select(Satisfaction, all_of(vars_scores))
+
+tree_test <- test_data %>%
+  select(Satisfaction, all_of(vars_scores))
+
+tree_model <- rpart(
+  Satisfaction ~ .,
+  data = tree_train,
+  method = "class",
+  control = rpart.control(
+    cp = 0.01,
+    minbucket = 20,
+    xval = 5
+  )
+)
+
+tree_model
+printcp(tree_model)
+```
+
+
+Osnovno stablo odlučivanja prvo deli putnike prema klasi leta. Putnici u poslovnoj klasi imaju veći udeo zadovoljnih putnika, dok su putnici u klasama `Eco` i `Eco Plus` uglavnom nezadovoljni. Kod poslovne klase sledeća važna promenljiva je `Digital_Score`, dok se kod ekonomskih klasa izdvajaju `Booking_Score`, `Not_Rated_Count`, `Type_of_Travel`, `Customer_Type` i `Cabin_Score`.
+
+Unakrsna validacija pokazuje da se relativna greška smanjuje sa povećanjem složenosti stabla. Najmanja procenjena greška dobija se za stablo sa 9 podela, pri vrednosti parametra složenosti `cp = 0,01`. Ovaj rezultat predstavlja osnovu za prikaz i evaluaciju osnovnog stabla na test skupu.
+
+## Grafički prikaz osnovnog stabla
+
+```{r}
+rpart.plot(
+  tree_model,
+  type = 4,
+  extra = 104,
+  fallen.leaves = TRUE,
+  box.palette = "GnBu",
+  shadow.col = "gray",
+  main = "Osnovno drvo odlučivanja"
+)
+```
+
+## Evaluacija osnovnog stabla na test skupu
+
+```{r}
+tree_prob <- predict(
+  tree_model,
+  newdata = tree_test,
+  type = "prob"
+)[, "Satisfied"]
+
+tree_evaluation <- evaluate_model(
+  actual = tree_test$Satisfaction,
+  prob_satisfied = tree_prob,
+  model_name = "Drvo odlučivanja - osnovno"
+)
+
+tree_evaluation$metrics
+tree_evaluation$confusion
+```
+
+Osnovno drvo odlučivanja ostvarilo je tačnost od 86,07% na test skupu. Precision iznosi 80,21%, što znači da je među putnicima koje je model označio kao zadovoljne približno 80% zaista zadovoljno. Recall iznosi 90,18%, što pokazuje da model uspešno prepoznaje većinu zadovoljnih putnika. F1 mera iznosi 84,91%, dok AUC od 0,901 ukazuje na veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
+
+Matrica konfuzije pokazuje da je model pravilno klasifikovao 10.178 zadovoljnih i 12.180 nezadovoljnih putnika. Pogrešno je klasifikovano 1.108 zadovoljnih putnika kao nezadovoljno i 2.511 nezadovoljnih putnika kao zadovoljno.
+
+Najvažnija početna podela u stablu zasnovana je na promenljivoj `Class`. Kod putnika u poslovnoj klasi važnu ulogu imaju `Digital_Score` i `Handling_Score`, dok se kod putnika u klasama `Eco` i `Eco Plus` izdvajaju `Booking_Score`, `Not_Rated_Count`, `Type_of_Travel`, `Customer_Type` i `Cabin_Score`. Ovo pokazuje da se faktori povezani sa zadovoljstvom razlikuju između različitih grupa putnika.
+
+
+## Podešavanje stabla pomoću unakrsne validacije
+
+
+Osnovno stablo je formirano sa početnom vrednošću parametra složenosti `cp = 0,01`. U ovom koraku ispitujemo više nivoa složenosti stabla pomoću petostruke unakrsne validacije. Cilj je da pronađemo model koji daje najmanju procenjenu grešku, bez nepotrebnog povećavanja složenosti.
+
+
+
+```{r}
+tree_cv <- rpart(
+  Satisfaction ~ .,
+  data = tree_train,
+  method = "class",
+  control = rpart.control(
+    cp = 0,
+    minbucket = 20,
+    xval = 5
+  )
+)
+
+tree_cp_table <- as.data.frame(tree_cv$cptable)
+tree_cp_table
+```
+
+
+```{r}
+best_row <- which.min(tree_cp_table$xerror)
+best_cp <- tree_cp_table$CP[best_row]
+
+best_cp
+
+tuned_tree <- prune(
+  tree_cv,
+  cp = best_cp
+)
+
+tuned_tree
+```
+
+
+```{r}
+tuned_tree_prob <- predict(
+  tuned_tree,
+  newdata = tree_test,
+  type = "prob"
+)[, "Satisfied"]
+
+tuned_tree_evaluation <- evaluate_model(
+  actual = tree_test$Satisfaction,
+  prob_satisfied = tuned_tree_prob,
+  model_name = "Drvo odlučivanja - podešeno"
+)
+
+tuned_tree_evaluation$metrics
+tuned_tree_evaluation$confusion
+```
+
+
+
+Podešeno stablo ostvarilo je tačnost od 92,29% na test skupu, što predstavlja značajno poboljšanje u odnosu na osnovno stablo, čija je tačnost iznosila 86,07%. AUC je povećan sa 0,901 na 0,959, što pokazuje da podešeno stablo veoma dobro razlikuje zadovoljne od nezadovoljnih putnika.
+
+Precision iznosi 92,82%, što znači da je većina putnika označenih kao zadovoljna zaista zadovoljna. Recall iznosi 89,15%, pa model uspešno prepoznaje najveći deo zadovoljnih putnika. F1 mera od 90,95% pokazuje dobar balans između preciznosti i odziva.
+
+Matrica konfuzije pokazuje da je model pravilno klasifikovao 10.062 zadovoljna i 13.913 nezadovoljnih putnika. Pogrešno je klasifikovao 1.224 zadovoljna putnika kao nezadovoljna i 778 nezadovoljnih putnika kao zadovoljna.
+
+Unakrsna validacija je odabrala vrednost parametra složenosti `cp = 0,00009599`. U poređenju sa osnovnim stablom, podešeno stablo ima veći broj podela i složeniju strukturu, ali ostvaruje znatno bolje rezultate na test skupu. Zbog toga je podešeno stablo odabrano kao bolji model za ovu fazu analize.
+
+
+## Važnost promenljivih u podešenom stablu
+
+```{r}
+tree_importance <- data.frame(
+  Promenljiva = names(tuned_tree$variable.importance),
+  Vaznost = as.numeric(tuned_tree$variable.importance)
+) %>%
+  arrange(desc(Vaznost)) %>%
+  mutate(
+    Relativna_vaznost = round(Vaznost / max(Vaznost) * 100, 2)
+  )
+
+tree_importance
+```
+
+```{r}
+ggplot(tree_importance, aes(
+  x = reorder(Promenljiva, Vaznost),
+  y = Vaznost
+)) +
+  geom_col(fill = "#3498db") +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Važnost promenljivih u podešenom stablu",
+    x = "Promenljiva",
+    y = "Važnost"
+  )
+```
+
+
+Rezultati pokazuju da je `Class` najvažnija promenljiva u podešenom stablu, sa relativnom važnošću od 100%. Slede `Digital_Score` sa 88,09%, `Type_of_Travel` sa 65,35%, `Cabin_Score` sa 61,87% i `Handling_Score` sa 51,74%.
+
+Ovi rezultati ukazuju da klasa leta i kvalitet digitalnih usluga imaju najveći doprinos u razdvajanju zadovoljnih i nezadovoljnih putnika. Važni su i svrha putovanja, doživljaj kabine i osoblje tokom leta.
+
+`Gender`, `Departure_Delay_in_Minutes` i `Delay_Difference` imaju veoma malu relativnu važnost, manju od 1%. To znači da u ovom modelu ove promenljive imaju mali doprinos predviđanju zadovoljstva u poređenju sa klasom leta i ocenama usluga.
+
+Važnost promenljivih predstavlja doprinos smanjenju nečistoće u stablu i ne treba je tumačiti kao uzročni uticaj. Takođe, kod promenljivih koje su međusobno povezane, važnost može biti raspodeljena između više karakteristika.
+
+
+# Random forest
+
+Random forest je ansambl metoda koja kombinuje veliki broj stabala odlučivanja. Svako stablo se trenira na slučajnom uzorku podataka i koristi slučajan podskup promenljivih pri svakoj podeli. Kombinovanjem predikcija više stabala smanjuje se preprilagođavanje podacima i dobija se stabilniji model od pojedinačnog stabla.
+
+
+## Osnovni random forest model
+
+Za početni model koristićemo 300 stabala odlučivanja. Broj promenljivih koje se razmatraju pri svakoj podeli (`mtry`) ostavićemo na podrazumevanoj vrednosti, koju paket `randomForest` određuje za klasifikaciju. Koristićemo iste trening i test podatke kao kod podešenog stabla, kako bi poređenje modela bilo objektivno.
+
+```{r}
+
+
+set.seed(123)
+
+rf_train <- tree_train
+rf_test <- tree_test
+
+rf_model <- randomForest(
+  Satisfaction ~ .,
+  data = rf_train,
+  ntree = 300,
+  importance = TRUE
+)
+
+rf_model
+```
+
+
+## Evaluacija osnovnog random forest modela
+
+```{r}
+rf_prob <- predict(
+  rf_model,
+  newdata = rf_test,
+  type = "prob"
+)[, "Satisfied"]
+
+rf_evaluation <- evaluate_model(
+  actual = rf_test$Satisfaction,
+  prob_satisfied = rf_prob,
+  model_name = "Random forest - osnovni"
+)
+
+rf_evaluation$metrics
+rf_evaluation$confusion
+```
+
+
+Osnovni random forest ostvario je tačnost od 92,86% na test skupu. Precision iznosi 93,19%, recall 90,15%, F1 mera 91,64%, a AUC 0,976. Ove vrednosti ukazuju na veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
+
+Model je pravilno klasifikovao 10.174 zadovoljna i 13.947 nezadovoljnih putnika. Pogrešno je klasifikovao 1.112 zadovoljnih putnika kao nezadovoljno i 744 nezadovoljna putnika kao zadovoljno.
+
+OOB greška od 7,27% predstavlja internu procenu greške tokom treniranja random forest modela. Konačne metrike modela procenjuju se na test skupu, koji nije korišćen za treniranje modela.
+
+U poređenju sa podešenim stablom odlučivanja, random forest ostvaruje nešto veću tačnost, F1 meru i AUC. To pokazuje da kombinovanje većeg broja stabala daje stabilnije predikcije od jednog stabla.
+
+
+## Važnost promenljivih u random forest modelu
+
+```{r}
+rf_importance <- data.frame(
+  Promenljiva = rownames(importance(rf_model)),
+  Vaznost = importance(rf_model)[, "MeanDecreaseAccuracy"]
+) %>%
+  arrange(desc(Vaznost)) %>%
+  mutate(
+    Relativna_vaznost = round(Vaznost / max(Vaznost) * 100, 2)
+  )
+
+rf_importance
+```
+
+```{r}
+ggplot(rf_importance, aes(
+  x = reorder(Promenljiva, Vaznost),
+  y = Vaznost
+)) +
+  geom_col(fill = "#27ae60") +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Važnost promenljivih u random forest modelu",
+    x = "Promenljiva",
+    y = "Srednje smanjenje tačnosti"
+  )
+```
+
+Prema srednjem smanjenju tačnosti, najvažnija promenljiva u random forest modelu je `Type_of_Travel`, sa relativnom važnošću od 100%. Slede `Not_Rated_Count` (89,84%), `Handling_Score` (87,61%), `Digital_Score` (81,92%) i `Customer_Type` (81,90%).
+
+Ovi rezultati pokazuju da svrha putovanja, broj neocenjenih usluga i ocene osoblja i digitalnih usluga imaju najveći doprinos predviđanju zadovoljstva. `Gender` ima najmanju važnost, dok `Delay_Difference` i `Flight_Distance` imaju manji doprinos u poređenju sa navedenim promenljivama.
+
+Rang važnosti se razlikuje od rangiranja kod pojedinačnog stabla. To je očekivano, jer random forest koristi veliki broj stabala i slučajne podskupove promenljivih. Važnost promenljive predstavlja prediktivni doprinos modelu, a ne dokaz da promenljiva uzročno utiče na zadovoljstvo.
+
+## Podešavanje random forest modela
+
+U ovom koraku proveravamo kako izbor broja promenljivih koje se razmatraju pri svakoj podeli (`mtry`) utiče na grešku modela. Za poređenje koristimo OOB grešku, odnosno grešku na opservacijama koje nisu korišćene za treniranje pojedinačnog stabla.
+
+```{r}
+set.seed(123)
+
+mtry_values <- c(2, 3, 5, 7, 9, 11)
+
+rf_tuning <- bind_rows(lapply(mtry_values, function(m) {
+  model <- randomForest(
+    Satisfaction ~ .,
+    data = rf_train,
+    ntree = 300,
+    mtry = m
+  )
+
+  data.frame(
+    mtry = m,
+    OOB_Error = model$err.rate[300, "OOB"]
+  )
+}))
+
+rf_tuning
+```
+
+```{r}
+ggplot(rf_tuning, aes(x = mtry, y = OOB_Error)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  theme_minimal() +
+  labs(
+    title = "OOB greška prema vrednosti parametra mtry",
+    x = "Broj promenljivih po podeli (mtry)",
+    y = "OOB greška"
+  )
+```
+
+Najmanja OOB greška ostvarena je za `mtry = 7` i iznosi 7,15%. Greška se smanjuje od `mtry = 2` do `mtry = 7`, nakon čega ponovo blago raste. Zbog toga se `mtry = 7` bira kao najbolja vrednost parametra za završni random forest model.
+
+Rezultati pokazuju da izbor prevelikog ili premalog broja promenljivih po podeli nije optimalan. Vrednost `mtry = 7` daje najbolju ravnotežu između raznovrsnosti stabala i informacija dostupnih pri svakoj podeli.
+
+## Završni podešeni random forest model
+
+Na osnovu prethodnog poređenja, završni model koristi `mtry = 7` i 300 stabala. Model se trenira na trening skupu, a konačna procena se vrši na test skupu.
+
+```{r}
+set.seed(123)
+
+tuned_rf_model <- randomForest(
+  Satisfaction ~ .,
+  data = rf_train,
+  ntree = 300,
+  mtry = 7,
+  importance = TRUE
+)
+
+tuned_rf_model
+```
+
+```{r}
+tuned_rf_prob <- predict(
+  tuned_rf_model,
+  newdata = rf_test,
+  type = "prob"
+)[, "Satisfied"]
+
+tuned_rf_evaluation <- evaluate_model(
+  actual = rf_test$Satisfaction,
+  prob_satisfied = tuned_rf_prob,
+  model_name = "Random forest - podešeni"
+)
+
+tuned_rf_evaluation$metrics
+tuned_rf_evaluation$confusion
+```
+
+
+Podešeni random forest ostvario je tačnost od 93,02% na test skupu. Precision iznosi 93,59%, recall 90,11%, F1 mera 91,82%, a AUC 0,977. Ove vrednosti pokazuju veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
+
+Model je pravilno klasifikovao 10.170 zadovoljnih i 13.995 nezadovoljnih putnika. Pogrešno je klasifikovao 1.116 zadovoljnih putnika kao nezadovoljno i 696 nezadovoljnih putnika kao zadovoljno.
+
+U odnosu na osnovni random forest, podešeni model je smanjio OOB grešku sa 7,27% na 7,15%, a tačnost na test skupu povećana je sa 92,86% na 93,02%. Najbolja vrednost parametra `mtry` bila je 7.
+
+
+## Važnost promenljivih u podešenom random forest modelu
+
+```{r}
+tuned_rf_importance <- data.frame(
+  Promenljiva = rownames(importance(tuned_rf_model)),
+  Vaznost = importance(tuned_rf_model)[, "MeanDecreaseAccuracy"]
+) %>%
+  arrange(desc(Vaznost)) %>%
+  mutate(
+    Relativna_vaznost = round(Vaznost / max(Vaznost) * 100, 2)
+  )
+
+tuned_rf_importance
+```
+
+```{r}
+ggplot(tuned_rf_importance, aes(
+  x = reorder(Promenljiva, Vaznost),
+  y = Vaznost
+)) +
+  geom_col(fill = "#27ae60") +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Važnost promenljivih u podešenom random forest modelu",
+    x = "Promenljiva",
+    y = "Srednje smanjenje tačnosti"
+  )
+```
+
+
+U podešenom random forest modelu najvažnija promenljiva je `Type_of_Travel`, sa relativnom važnošću od 100%. Slede `Booking_Score` (86,28%), `Handling_Score` (83,21%), `Digital_Score` (79,79%), `Not_Rated_Count` (78,72%) i `Customer_Type` (75,55%).
+
+Ovi rezultati pokazuju da svrha putovanja, ocene organizacije putovanja, osoblja i digitalnih usluga, kao i broj neocenjenih usluga, imaju najveći prediktivni značaj. `Gender` ima najmanju važnost, dok kašnjenja i dužina leta imaju umeren ili manji doprinos.
+
+Važnost promenljivih predstavlja njihov doprinos prediktivnoj tačnosti modela i ne dokazuje uzročno-posledični uticaj na zadovoljstvo putnika.
