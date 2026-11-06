@@ -18,6 +18,9 @@ knitr::opts_chunk$set(
 )
 
 library(tidyverse)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
 ```
 
 
@@ -2951,24 +2954,6 @@ vaznost
 
 # Drvo odlučivanja i random forest
 
-## Provera pripremljenih podataka
-
-```{r}
-library(rpart)
-library(rpart.plot)
-
-stopifnot(
-  exists("train_data"),
-  exists("test_data"),
-  exists("vars_scores"),
-  exists("evaluate_model")
-)
-
-dim(train_data)
-dim(test_data)
-length(vars_scores)
-names(train_data)[names(train_data) %in% vars_scores]
-```
 
 ## Osnovno drvo odlučivanja
 
@@ -3161,7 +3146,7 @@ Random forest je ansambl metoda koja kombinuje veliki broj stabala odlučivanja.
 Za početni model koristićemo 300 stabala odlučivanja. Broj promenljivih koje se razmatraju pri svakoj podeli (`mtry`) ostavićemo na podrazumevanoj vrednosti, koju paket `randomForest` određuje za klasifikaciju. Koristićemo iste trening i test podatke kao kod podešenog stabla, kako bi poređenje modela bilo objektivno.
 
 ```{r}
-library(randomForest)
+
 
 set.seed(123)
 

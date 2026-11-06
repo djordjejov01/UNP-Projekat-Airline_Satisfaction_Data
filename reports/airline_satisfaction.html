@@ -5044,33 +5044,6 @@ vaznost</code></pre>
 </div>
 <div id="drvo-odlučivanja-i-random-forest" class="section level1">
 <h1>Drvo odlučivanja i random forest</h1>
-<div id="provera-pripremljenih-podataka" class="section level2">
-<h2>Provera pripremljenih podataka</h2>
-<pre class="r"><code>library(rpart)
-library(rpart.plot)
-
-stopifnot(
-  exists(&quot;train_data&quot;),
-  exists(&quot;test_data&quot;),
-  exists(&quot;vars_scores&quot;),
-  exists(&quot;evaluate_model&quot;)
-)
-
-dim(train_data)</code></pre>
-<pre><code>## [1] 103903     28</code></pre>
-<pre class="r"><code>dim(test_data)</code></pre>
-<pre><code>## [1] 25977    28</code></pre>
-<pre class="r"><code>length(vars_scores)</code></pre>
-<pre><code>## [1] 13</code></pre>
-<pre class="r"><code>names(train_data)[names(train_data) %in% vars_scores]</code></pre>
-<pre><code>##  [1] &quot;Gender&quot;                     &quot;Customer_Type&quot;             
-##  [3] &quot;Type_of_Travel&quot;             &quot;Class&quot;                     
-##  [5] &quot;Age&quot;                        &quot;Flight_Distance&quot;           
-##  [7] &quot;Departure_Delay_in_Minutes&quot; &quot;Delay_Difference&quot;          
-##  [9] &quot;Cabin_Score&quot;                &quot;Booking_Score&quot;             
-## [11] &quot;Handling_Score&quot;             &quot;Digital_Score&quot;             
-## [13] &quot;Not_Rated_Count&quot;</code></pre>
-</div>
 <div id="osnovno-drvo-odlučivanja" class="section level2">
 <h2>Osnovno drvo odlučivanja</h2>
 <p>Drvo odlučivanja je klasifikacioni model koji sukcesivnim podelama
@@ -5812,9 +5785,7 @@ ostavićemo na podrazumevanoj vrednosti, koju paket
 <code>randomForest</code> određuje za klasifikaciju. Koristićemo iste
 trening i test podatke kao kod podešenog stabla, kako bi poređenje
 modela bilo objektivno.</p>
-<pre class="r"><code>library(randomForest)
-
-set.seed(123)
+<pre class="r"><code>set.seed(123)
 
 rf_train &lt;- tree_train
 rf_test &lt;- tree_test
