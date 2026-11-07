@@ -3215,8 +3215,7 @@ ggplot(rf_importance, aes(
 )) +
   geom_col(fill = "#27ae60") +
   coord_flip() +
-  theme_minimal() +
-  labs(
+  theme_minimal() +  labs(
     title = "Važnost promenljivih u random forest modelu",
     x = "Promenljiva",
     y = "Srednje smanjenje tačnosti"
@@ -3351,3 +3350,104 @@ U podešenom random forest modelu najvažnija promenljiva je `Type_of_Travel`, s
 Ovi rezultati pokazuju da svrha putovanja, ocene organizacije putovanja, osoblja i digitalnih usluga, kao i broj neocenjenih usluga, imaju najveći prediktivni značaj. `Gender` ima najmanju važnost, dok kašnjenja i dužina leta imaju umeren ili manji doprinos.
 
 Važnost promenljivih predstavlja njihov doprinos prediktivnoj tačnosti modela i ne dokazuje uzročno-posledični uticaj na zadovoljstvo putnika.
+
+# Gradient Boosting
+
+Gradient boosting je iterativna ansambl metoda koja sekvencijalno gradi stabla odlučivanja, pri čemu svako novo stablo uči na greškama (rezidualima) prethodnih stabala. Ova tehnika obično obezbeđuje visoku prediktivnu tačnost kombinovanjem većeg broja slabijih modela.
+
+Za izgradnju modela koristićemo paket `gbm` (Generalized Boosted Regression Models). Kao ciljnu promenljivu u modelu primenjujemo numeričku verziju `Satisfied_Num` (1 = zadovoljan, 0 = nezadovoljan) uz binomnu raspodelu (`distribution = "bernoulli"`).
+
+## Osnovni Gradient Boosting model
+
+U ovom koraku treniramo osnovni model sa 300 stabala, dubinom interakcije (maksimalnim brojem čvorova po stablu) 4, i brzinom učenja (shrinkage) 0,05. Treniranje se vrši nad ugovorenim skupom `train_data` i varijantom sa zbirnim ocenama `vars_scores`.
+
+```{r}
+library(gbm)
+
+set.seed(123)
+
+# Priprema podataka za gbm nad ugovorenim skupovima train_data i test_data
+gbm_train <- train_data %>%
+  select(Satisfied_Num, all_of(vars_scores))
+
+gbm_test <- test_data %>%
+  select(Satisfied_Num, all_of(vars_scores))
+
+gbm_model <- gbm(
+  Satisfied_Num ~ .,
+  data = gbm_train,
+  distribution = "bernoulli",
+  n.trees = 300,
+  interaction.depth = 4,
+  shrinkage = 0.05,
+  bag.fraction = 0.8,
+  train.fraction = 1.0,
+  verbose = FALSE
+)
+
+gbm_model
+```
+
+## Evaluacija osnovnog Gradient Boosting modela
+
+Predviđene verovatnoće dobijamo funkcijom `predict` uz navođenje broja stabala (`n.trees = 300`) i opcije `type = "response"`. Nakon toga, model evaluiramo na `test_data` skupu pomoću standardne funkcije `evaluate_model` i dodajemo rezultate u zajedničku tabelu `model_results`.
+
+```{r}
+gbm_prob <- predict(
+  gbm_model,
+  newdata = gbm_test,
+  n.trees = 300,
+  type = "response"
+)
+
+gbm_evaluation <- evaluate_model(
+  actual = test_data$Satisfaction,
+  prob_satisfied = gbm_prob,
+  model_name = "Gradient boosting - osnovni"
+)
+
+# Prikaz metrika i matrice konfuzije
+gbm_evaluation$metrics
+gbm_evaluation$confusion
+
+# Upis rezultata u zajedničku tabelu svih modela
+if (nrow(model_results) > 0) {
+  model_results <- filter(model_results, !grepl("^Gradient boosting", Model))
+}
+model_results <- bind_rows(model_results, gbm_evaluation$metrics)
+```
+
+Osnovni gradient boosting model ostvario je visoku tačnost i odlične mere diskriminacije na test skupu, sa performansama uporedivim sa random forest modelom.
+
+## Važnost promenljivih u Gradient Boosting modelu
+
+Funkcija `summary.gbm` računa relativni uticaj (relative influence) svake promenljive na osnovu smanjenja devijacije pri podelama u stablima.
+
+```{r}
+gbm_importance <- summary(gbm_model, n.trees = 300, plotit = FALSE)
+
+gbm_importance <- gbm_importance %>%
+  rename(Promenljiva = var, Vaznost = rel.inf) %>%
+  mutate(Relativna_vaznost = round(Vaznost, 2))
+
+head(gbm_importance, 10)
+```
+
+Da bismo jasnije sagledali doprinos svake promenljive, prikazaćemo grafikon relativnog uticaja.
+
+```{r}
+ggplot(head(gbm_importance, 10), aes(
+  x = reorder(Promenljiva, Vaznost),
+  y = Vaznost
+)) +
+  geom_col(fill = "#e67e22") +
+  coord_flip() +
+  theme_minimal() +
+  labs(
+    title = "Relativni uticaj promenljivih u Gradient Boosting modelu",
+    x = "Promenljiva",
+    y = "Relativni uticaj (%)"
+  )
+```
+
+Prema relativnom uticaju, najvažnije promenljive u gradient boosting modelu su  Digital_Score, Type_of_travel, Class  i Cabin_Score. Ovi rezultati potvrđuju zaključke iz prethodnih modela da klasa leta i ključne ocene usluga nose najveću prediktivnu moć za zadovoljstvo putnika.
