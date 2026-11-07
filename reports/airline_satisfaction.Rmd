@@ -3135,7 +3135,7 @@ Ovi rezultati ukazuju da klasa leta i kvalitet digitalnih usluga imaju najveći 
 
 Važnost promenljivih predstavlja doprinos smanjenju nečistoće u stablu i ne treba je tumačiti kao uzročni uticaj. Takođe, kod promenljivih koje su međusobno povezane, važnost može biti raspodeljena između više karakteristika.
 
-<!--
+
 # Random forest
 
 Random forest je ansambl metoda koja kombinuje veliki broj stabala odlučivanja. Svako stablo se trenira na slučajnom uzorku podataka i koristi slučajan podskup promenljivih pri svakoj podeli. Kombinovanjem predikcija više stabala smanjuje se preprilagođavanje podacima i dobija se stabilniji model od pojedinačnog stabla.
@@ -3350,7 +3350,7 @@ U podešenom random forest modelu najvažnija promenljiva je `Type_of_Travel`, s
 Ovi rezultati pokazuju da svrha putovanja, ocene organizacije putovanja, osoblja i digitalnih usluga, kao i broj neocenjenih usluga, imaju najveći prediktivni značaj. `Gender` ima najmanju važnost, dok kašnjenja i dužina leta imaju umeren ili manji doprinos.
 
 Važnost promenljivih predstavlja njihov doprinos prediktivnoj tačnosti modela i ne dokazuje uzročno-posledični uticaj na zadovoljstvo putnika.
--->
+
 # Gradient Boosting
 
 Gradient boosting je iterativna ansambl metoda koja sekvencijalno gradi stabla odlučivanja, pri čemu svako novo stablo uči na greškama (rezidualima) prethodnih stabala. Ova tehnika obično obezbeđuje visoku prediktivnu tačnost kombinovanjem većeg broja slabijih modela.
@@ -3450,4 +3450,4 @@ ggplot(head(gbm_importance, 10), aes(
   )
 ```
 
-Prema relativnom uticaju, najvažnije promenljive u gradient boosting modelu su Class, Digital_Score, Handling_Score i Cabin_Score. Ovi rezultati potvrđuju zaključke iz prethodnih modela da klasa leta i ključne ocene usluga nose najveću prediktivnu moć za zadovoljstvo putnika.
+Prema relativnom uticaju, najvažnije promenljive u gradient boosting modelu su  Digital_Score, Type_of_travel, Class  i Cabin_Score. Ovi rezultati potvrđuju zaključke iz prethodnih modela da klasa leta i ključne ocene usluga nose najveću prediktivnu moć za zadovoljstvo putnika.
