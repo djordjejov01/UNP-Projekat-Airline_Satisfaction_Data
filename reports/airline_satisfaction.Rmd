@@ -3156,7 +3156,7 @@ rf_test <- tree_test
 rf_model <- randomForest(
   Satisfaction ~ .,
   data = rf_train,
-  ntree = 100,
+  ntree = 300,
   importance = TRUE
 )
 
@@ -3241,13 +3241,13 @@ rf_tuning <- bind_rows(lapply(mtry_values, function(m) {
   model <- randomForest(
     Satisfaction ~ .,
     data = rf_train,
-    ntree = 100,
+    ntree = 300,
     mtry = m
   )
 
   data.frame(
     mtry = m,
-    OOB_Error = model$err.rate[100, "OOB"]
+    OOB_Error = model$err.rate[300, "OOB"]
   )
 }))
 
@@ -3281,7 +3281,7 @@ set.seed(123)
 tuned_rf_model <- randomForest(
   Satisfaction ~ .,
   data = rf_train,
-  ntree = 100,
+  ntree = 300,
   mtry = 7,
   importance = TRUE
 )
@@ -3377,8 +3377,8 @@ gbm_model <- gbm(
   Satisfied_Num ~ .,
   data = gbm_train,
   distribution = "bernoulli",
-  n.trees = 100,
-  interaction.depth = 3,
+  n.trees = 300,
+  interaction.depth = 4,
   shrinkage = 0.05,
   bag.fraction = 0.8,
   train.fraction = 1.0,
@@ -3396,7 +3396,7 @@ Predviđene verovatnoće dobijamo funkcijom `predict` uz navođenje broja stabal
 gbm_prob <- predict(
   gbm_model,
   newdata = gbm_test,
-  n.trees = 100,
+  n.trees = 300,
   type = "response"
 )
 
@@ -3424,7 +3424,7 @@ Osnovni gradient boosting model ostvario je visoku tačnost i odlične mere disk
 Funkcija `summary.gbm` računa relativni uticaj (relative influence) svake promenljive na osnovu smanjenja devijacije pri podelama u stablima.
 
 ```{r}
-gbm_importance <- summary(gbm_model, n.trees = 100, plotit = FALSE)
+gbm_importance <- summary(gbm_model, n.trees = 300, plotit = FALSE)
 
 gbm_importance <- gbm_importance %>%
   rename(Promenljiva = var, Vaznost = rel.inf) %>%
