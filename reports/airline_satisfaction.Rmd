@@ -21,6 +21,7 @@ library(tidyverse)
 library(rpart)
 library(rpart.plot)
 library(randomForest)
+library(gbm)
 ```
 
 
@@ -2852,6 +2853,12 @@ varijante_tabela
 # Provera: varijanta sa zbirnim ocenama mora imati isti AIC kao konačni model
 round(c(AIC(lr_modeli[["zbirne ocene"]]), AIC(lr_final)), 1)
 ```
+### Zaključak poglavlja
+
+Analiza sprovedena kroz logističku regresiju pokazala je da odabrane ulazne promenljive vrlo dobro objašnjavaju zadovoljstvo putnika, što potvrđuju visoke vrednosti McFaddenovog pseudo $R^2$ pokazatelja. Kroz iterativno poboljšanje osnovnog modela utvrđeno je da relacije sa zadovoljstvom nisu u potpunosti linearne, zbog čega su uspešno uvedeni nelinearni članovi (poput kvadratnog člana starosti i logaritamske transformacije kašnjenja), kao i tretman broja neocenjenih usluga (`Not_Rated_Count`) kao faktora. 
+
+Posebno značajnim su se pokazale interakcije između svrhe putovanja i zbirnih ocena usluga, kao i interakcije sa tipom korisnika, što ukazuje na to da faktori zadovoljstva nemaju istu težinu za sve segmente putnika (npr. poslovne u odnosu na lične putnike). Testiranjem četiri različite varijante skupa obeležja kreirana je čvrsta osnova za nepristrasno poređenje performansi sa stablima odlučivanja, random forestom i gradient boosting modelom na test skupu.
+
 ## Evaluacija na test skupu
 
 Test skup se koristi tek sada, jednom, za sve četiri varijante. Specifikacija modela određena je isključivo na trening skupu, pa test skup služi samo za nepristrasnu procenu kvaliteta predviđanja. Prag za klasifikaciju je 0,5. Najjednostavniji model, koji bi svim putnicima dodelio klasu `Not Satisfied`, ima tačnost 56,55%.
@@ -2961,14 +2968,19 @@ Drvo odlučivanja je klasifikacioni model koji sukcesivnim podelama podataka for
 
 U ovom koraku formiramo osnovno drvo odlučivanja. Model se trenira na trening skupu, dok će se njegova uspešnost proceniti tek na test skupu. Koristimo zbirne ocene usluga (`Cabin_Score`, `Booking_Score`, `Handling_Score` i `Digital_Score`), zajedno sa osnovnim karakteristikama putnika i leta.
 
+U cilju fer poređenja sa modelima koji ne koriste broj neocenjenih usluga, za stablo odlučivanja je pripremljena i testirana varijanta skupa podataka bez obeležja `Not_Rated_Count`. Poređenjem performansi modela sa ovom promenljivom i bez nje potvrđen je njen značajni uticaj na prediktivnu moć stabala, s obzirom na to da struktura podela direktno integriše informaciju o broju neocenjenih stavki.
 
 ```{r}
+# Varijanta bez Not_Rated_Count za poređenje
+vars_scores_no_nrc <- setdiff(vars_scores, "Not_Rated_Count")
+
 tree_train <- train_data %>%
-  select(Satisfaction, all_of(vars_scores))
+  select(Satisfaction, all_of(vars_scores_no_nrc))
 
 tree_test <- test_data %>%
-  select(Satisfaction, all_of(vars_scores))
+  select(Satisfaction, all_of(vars_scores_no_nrc))
 
+set.seed(123)
 tree_model <- rpart(
   Satisfaction ~ .,
   data = tree_train,
@@ -2987,7 +2999,7 @@ printcp(tree_model)
 
 Osnovno stablo odlučivanja prvo deli putnike prema klasi leta. Putnici u poslovnoj klasi imaju veći udeo zadovoljnih putnika, dok su putnici u klasama `Eco` i `Eco Plus` uglavnom nezadovoljni. Kod poslovne klase sledeća važna promenljiva je `Digital_Score`, dok se kod ekonomskih klasa izdvajaju `Booking_Score`, `Not_Rated_Count`, `Type_of_Travel`, `Customer_Type` i `Cabin_Score`.
 
-Unakrsna validacija pokazuje da se relativna greška smanjuje sa povećanjem složenosti stabla. Najmanja procenjena greška dobija se za stablo sa 9 podela, pri vrednosti parametra složenosti `cp = 0,01`. Ovaj rezultat predstavlja osnovu za prikaz i evaluaciju osnovnog stabla na test skupu.
+Unakrsna validacija pokazuje da se relativna greška smanjuje sa povećanjem složenosti stabla. Tabela se završava na cp = 0,01, jer je osnovno stablo na toj vrednosti zaustavljeno, pa se optimalna složenost određuje tek u narednom koraku, u kome se stablo gradi do cp = 0 i zatim obrezuje.
 
 ## Grafički prikaz osnovnog stabla
 
@@ -3037,6 +3049,7 @@ Osnovno stablo je formirano sa početnom vrednošću parametra složenosti `cp =
 
 
 ```{r}
+set.seed(123)
 tree_cv <- rpart(
   Satisfaction ~ .,
   data = tree_train,
@@ -3093,7 +3106,7 @@ Precision iznosi 92,82%, što znači da je većina putnika označenih kao zadovo
 
 Matrica konfuzije pokazuje da je model pravilno klasifikovao 10.062 zadovoljna i 13.913 nezadovoljnih putnika. Pogrešno je klasifikovao 1.224 zadovoljna putnika kao nezadovoljna i 778 nezadovoljnih putnika kao zadovoljna.
 
-Unakrsna validacija je odabrala vrednost parametra složenosti `cp = 0,00009599`. U poređenju sa osnovnim stablom, podešeno stablo ima veći broj podela i složeniju strukturu, ali ostvaruje znatno bolje rezultate na test skupu. Zbog toga je podešeno stablo odabrano kao bolji model za ovu fazu analize.
+Unakrsna validacija je odabrala vrednost parametra složenosti `cp = 0,00009599`. U poređenju sa osnovnim stablom, podešeno stablo ima veći broj podela i složeniju strukturu, ali ostvaruje znatno bolje rezultate na test skupu. Podešeno stablo je odabrano na osnovu unakrsne validacije na trening skupu, a rezultat na test skupu potvrđuje da je poboljšanje stvarno.
 
 
 ## Važnost promenljivih u podešenom stablu
@@ -3150,8 +3163,11 @@ Za početni model koristićemo 300 stabala odlučivanja. Broj promenljivih koje 
 
 set.seed(123)
 
-rf_train <- tree_train
-rf_test <- tree_test
+rf_train <- train_data %>%
+  select(Satisfaction, all_of(vars_scores_no_nrc))
+
+rf_test <- test_data %>%
+  select(Satisfaction, all_of(vars_scores_no_nrc))
 
 rf_model <- randomForest(
   Satisfaction ~ .,
@@ -3304,6 +3320,13 @@ tuned_rf_evaluation <- evaluate_model(
 
 tuned_rf_evaluation$metrics
 tuned_rf_evaluation$confusion
+
+model_results <- model_results %>%
+  filter(!grepl("^(Drvo|Random forest)", Model)) %>%
+  bind_rows(
+    tree_evaluation$metrics, tuned_tree_evaluation$metrics,
+    rf_evaluation$metrics, tuned_rf_evaluation$metrics
+  )
 ```
 
 
@@ -3359,7 +3382,7 @@ Za izgradnju modela koristićemo paket `gbm` (Generalized Boosted Regression Mod
 
 ## Osnovni Gradient Boosting model
 
-U ovom koraku treniramo osnovni model sa 300 stabala, dubinom interakcije (maksimalnim brojem čvorova po stablu) 4, i brzinom učenja (shrinkage) 0,05. Treniranje se vrši nad ugovorenim skupom `train_data` i varijantom sa zbirnim ocenama `vars_scores`.
+U ovom koraku treniramo osnovni model sa 300 stabala, dubinom interakcije (maksimalnim brojem čvorova po stablu) 4, i brzinom učenja (shrinkage) 0,05. Treniranje se vrši nad zajedničkim skupovima `train_data` i varijantom sa zbirnim ocenama `vars_scores`.
 
 ```{r}
 library(gbm)
@@ -3417,7 +3440,7 @@ if (nrow(model_results) > 0) {
 model_results <- bind_rows(model_results, gbm_evaluation$metrics)
 ```
 
-Osnovni gradient boosting model ostvario je visoku tačnost i odlične mere diskriminacije na test skupu, sa performansama uporedivim sa random forest modelom.
+Osnovni gradient boosting model ostvario je tačnost od 93,02% (uz F1 meru od 91,82% i AUC od 0,977) na test skupu, čime je potvrdio performanse u potpunosti uporedive sa podešenim random forest modelom.
 
 ## Važnost promenljivih u Gradient Boosting modelu
 
@@ -3450,4 +3473,30 @@ ggplot(head(gbm_importance, 10), aes(
   )
 ```
 
-Prema relativnom uticaju, najvažnije promenljive u gradient boosting modelu su  Digital_Score, Type_of_travel, Class  i Cabin_Score. Ovi rezultati potvrđuju zaključke iz prethodnih modela da klasa leta i ključne ocene usluga nose najveću prediktivnu moć za zadovoljstvo putnika.
+Prema relativnom uticaju, najvažnije promenljive u gradient boosting modelu su  Digital_Score, Type_of_Travel, Class  i Cabin_Score. Ovi rezultati potvrđuju zaključke iz prethodnih modela da klasa leta i ključne ocene usluga nose najveću prediktivnu moć za zadovoljstvo putnika.
+
+# Poređenje modela
+
+U cilju sveobuhvatne evaluacije, sve verzije izgrađenih modela (logistička regresija, stabla odlučivanja, random forest i gradient boosting) upoređene su na istom test skupu. U nastavku je prikazana objedinjena tabela modela sortirana po vrednosti AUC metrike, kao i vizuelni poređenje tačnosti i AUC-a po modelima i varijantama skupa promenljivih.
+
+```{r model-comparison-table}
+# Prikaz objedinjene tabele rezultata sortirane po AUC opadajuće
+model_results_sorted <- model_results %>%
+  arrange(desc(AUC)) %>%
+  mutate(across(where(is.numeric), ~ round(., 4)))
+
+model_results_sorted
+```
+
+```{r}
+# Vizuelno poređenje modela prema AUC metrici
+ggplot(model_results, aes(x = reorder(Model, AUC), y = AUC, fill = Model)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal() +
+  labs(
+    title = "Poređenje modela prema AUC metrici na test skupu",
+    x = "Model",
+    y = "AUC"
+  )
