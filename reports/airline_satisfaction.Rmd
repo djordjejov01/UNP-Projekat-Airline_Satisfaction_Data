@@ -3500,3 +3500,8 @@ ggplot(model_results, aes(x = reorder(Model, AUC), y = AUC, fill = Model)) +
     x = "Model",
     y = "AUC"
   )
+```
+
+Iz priloženog grafikon poređenja modela prema AUC metrici na test skupu jasno se vidi da najvišu diskriminacionu moć ostvaruju ansambl metode i napredne varijante logističke regresije. 
+
+**Gradient boosting (osnovni)** i **podešeni random forest** nalaze se na samom vrhu sa AUC vrednostima koje premašuju 0,97, što potvrđuje da kombinovanje stabala uspešno hvata složene nelinearne interakcije u podacima. S druge strane, **logistička regresija sa pojedinačnim i zbirnim ocenama** ostvaruje izuzetno konkurentne rezultate (blizu 0,96), dok modeli bez ocena usluga ili osnovno stablo odlučivanja beleže nešto niže performanse. Varijanta logističke regresije bez promenljive `Not_Rated_Count` pokazuje stabilnost, ali zadržava nešto slabiju diskriminaciju u odnosu na modele koji integrišu informaciju o broju neocenjenih stavki, čime se i grafički potvrđuje opravdanost uvođenja ove promenljive u analizu.
