@@ -3360,22 +3360,27 @@ Random forest je ansambl metoda koja kombinuje veliki broj stabala odlučivanja.
 Za početni model koristićemo 300 stabala odlučivanja. Broj promenljivih koje se razmatraju pri svakoj podeli (`mtry`) ostavićemo na podrazumevanoj vrednosti, koju paket `randomForest` određuje za klasifikaciju. Koristićemo iste trening i test podatke kao kod podešenog stabla, kako bi poređenje modela bilo objektivno.
 
 ```{r}
+rf_datasets <- tree_datasets
 
+rf_models <- lapply(names(rf_datasets), function(varijanta) {
+  set.seed(123)
 
-set.seed(123)
+  randomForest(
+    Satisfaction ~ .,
+    data = rf_datasets[[varijanta]]$train,
+    ntree = 300,
+    importance = TRUE
+  )
+})
 
-rf_train <- train_data %>%
-  select(Satisfaction, all_of(vars_scores_no_nrc))
+names(rf_models) <- names(rf_datasets)
 
-rf_test <- test_data %>%
-  select(Satisfaction, all_of(vars_scores_no_nrc))
+# Glavni model za postojeće tekstualne delove:
+# zbirne ocene + Not_Rated_Count
+rf_model <- rf_models[["zbirne ocene"]]
 
-rf_model <- randomForest(
-  Satisfaction ~ .,
-  data = rf_train,
-  ntree = 300,
-  importance = TRUE
-)
+rf_train <- rf_datasets[["zbirne ocene"]]$train
+rf_test  <- rf_datasets[["zbirne ocene"]]$test
 
 rf_model
 ```
@@ -3384,22 +3389,54 @@ rf_model
 ## Evaluacija osnovnog random forest modela
 
 ```{r}
-rf_prob <- predict(
-  rf_model,
-  newdata = rf_test,
-  type = "prob"
-)[, "Satisfied"]
-
-rf_evaluation <- evaluate_model(
-  actual = rf_test$Satisfaction,
-  prob_satisfied = rf_prob,
-  model_name = "Random forest - osnovni"
+rf_variant_labels <- c(
+  "pojedinacne ocene",
+  "zbirne ocene",
+  "bez ocena usluga",
+  "zbirne ocene bez Not_Rated_Count"
 )
+
+rf_evaluations <- setNames(
+  lapply(seq_along(rf_models), function(i) {
+    varijanta <- names(rf_models)[i]
+
+    rf_prob <- predict(
+      rf_models[[varijanta]],
+      newdata = rf_datasets[[varijanta]]$test,
+      type = "prob"
+    )[, "Satisfied"]
+
+    evaluate_model(
+      actual = rf_datasets[[varijanta]]$test$Satisfaction,
+      prob_satisfied = rf_prob,
+      model_name = paste(
+        "Random forest - osnovni -",
+        rf_variant_labels[i]
+      )
+    )
+  }),
+  names(rf_models)
+)
+
+rf_metrics <- bind_rows(
+  lapply(rf_evaluations, `[[`, "metrics")
+)
+
+rf_evaluation <- rf_evaluations[["zbirne ocene"]]
 
 rf_evaluation$metrics
 rf_evaluation$confusion
+rf_metrics
 ```
 
+```{r}
+model_results <- model_results %>%
+  filter(!grepl("^Random forest - osnovni", Model)) %>%
+  bind_rows(rf_metrics)
+
+model_results %>%
+  filter(grepl("^Random forest - osnovni", Model))
+```
 
 Osnovni random forest ostvario je tačnost od 92,86% na test skupu. Precision iznosi 93,19%, recall 90,15%, F1 mera 91,64%, a AUC 0,976. Ove vrednosti ukazuju na veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
 
@@ -3407,7 +3444,7 @@ Model je pravilno klasifikovao 10.174 zadovoljna i 13.947 nezadovoljnih putnika.
 
 OOB greška od 7,27% predstavlja internu procenu greške tokom treniranja random forest modela. Konačne metrike modela procenjuju se na test skupu, koji nije korišćen za treniranje modela.
 
-U poređenju sa podešenim stablom odlučivanja, random forest ostvaruje nešto veću tačnost, F1 meru i AUC. To pokazuje da kombinovanje većeg broja stabala daje stabilnije predikcije od jednog stabla.
+U poređenju sa podešenim stablom odlučivanja, osnovni random forest ostvaruje veću tačnost (92,86% prema 92,22%), F1 meru (91,64% prema 90,83%) i AUC (0,976 prema 0,959). To pokazuje da kombinovanje većeg broja stabala daje bolje i stabilnije predikcije od jednog stabla odlučivanja.
 
 
 ## Važnost promenljivih u random forest modelu
@@ -3447,34 +3484,58 @@ Rang važnosti se razlikuje od rangiranja kod pojedinačnog stabla. To je očeki
 
 ## Podešavanje random forest modela
 
-U ovom koraku proveravamo kako izbor broja promenljivih koje se razmatraju pri svakoj podeli (`mtry`) utiče na grešku modela. Za poređenje koristimo OOB grešku, odnosno grešku na opservacijama koje nisu korišćene za treniranje pojedinačnog stabla.
+U ovom koraku za svaku od četiri varijante promenljivih ispitujemo različite
+vrednosti parametra `mtry`. Ovaj parametar određuje koliko se promenljivih
+razmatra pri svakoj podeli stabla. Najbolja vrednost bira se na osnovu najmanje
+OOB greške, koristeći isključivo trening skup. Test skup se ne koristi za izbor
+parametra.
 
 ```{r}
-set.seed(123)
+rf_tuning <- bind_rows(
+  lapply(seq_along(rf_datasets), function(i) {
+    train_data <- rf_datasets[[i]]$train
+    mtry_values <- seq_len(ncol(train_data) - 1)
 
-mtry_values <- c(2, 3, 5, 7, 9, 11)
+    set.seed(123)
 
-rf_tuning <- bind_rows(lapply(mtry_values, function(m) {
-  model <- randomForest(
-    Satisfaction ~ .,
-    data = rf_train,
-    ntree = 300,
-    mtry = m
-  )
+    bind_rows(
+      lapply(mtry_values, function(m) {
+        model <- randomForest(
+          Satisfaction ~ .,
+          data = train_data,
+          ntree = 100,
+          mtry = m
+        )
 
-  data.frame(
-    mtry = m,
-    OOB_Error = model$err.rate[300, "OOB"]
-  )
-}))
+        data.frame(
+          Varijanta = paste0("varijanta_", i),
+          mtry = m,
+          OOB_Error = model$err.rate[100, "OOB"]
+        )
+      })
+    )
+  })
+)
 
 rf_tuning
 ```
 
 ```{r}
+best_mtry <- sapply(
+  split(rf_tuning, rf_tuning$Varijanta),
+  function(rezultati) {
+    rezultati$mtry[which.min(rezultati$OOB_Error)]
+  }
+)
+
+best_mtry
+```
+
+```{r}
 ggplot(rf_tuning, aes(x = mtry, y = OOB_Error)) +
   geom_line() +
-  geom_point(size = 3) +
+  geom_point(size = 2) +
+  facet_wrap(~ Varijanta, scales = "free_x") +
   scale_y_continuous(labels = scales::percent_format()) +
   theme_minimal() +
   labs(
@@ -3484,58 +3545,80 @@ ggplot(rf_tuning, aes(x = mtry, y = OOB_Error)) +
   )
 ```
 
-Najmanja OOB greška ostvarena je za `mtry = 7` i iznosi 7,15%. Greška se smanjuje od `mtry = 2` do `mtry = 7`, nakon čega ponovo blago raste. Zbog toga se `mtry = 7` bira kao najbolja vrednost parametra za završni random forest model.
+Najmanja OOB greška za pojedinačne ocene ostvarena je pri mtry = 11 i iznosi 3,92%. Za zbirne ocene najbolja vrednost je mtry = 9, uz OOB grešku od 7,25%. Kod varijante bez ocena usluga najbolji rezultat daje mtry = 3, sa OOB greškom od 19,83%, dok je za zbirne ocene bez Not_Rated_Count najbolja vrednost mtry = 6, uz OOB grešku od 8,26%.
 
-Rezultati pokazuju da izbor prevelikog ili premalog broja promenljivih po podeli nije optimalan. Vrednost `mtry = 7` daje najbolju ravnotežu između raznovrsnosti stabala i informacija dostupnih pri svakoj podeli.
+Optimalna vrednost parametra mtry zavisi od varijante skupa promenljivih. Varijanta sa pojedinačnim ocenama ostvaruje najmanju OOB grešku, dok varijanta bez ocena usluga ima najveću grešku. Uklanjanje promenljive Not_Rated_Count iz skupa zbirnih ocena povećava OOB grešku sa 7,25% na 8,26%.
 
 ## Završni podešeni random forest model
 
-Na osnovu prethodnog poređenja, završni model koristi `mtry = 7` i 300 stabala. Model se trenira na trening skupu, a konačna procena se vrši na test skupu.
 
 ```{r}
-set.seed(123)
+tuned_rf_models <- setNames(
+  lapply(seq_along(rf_datasets), function(i) {
+    set.seed(123)
 
-tuned_rf_model <- randomForest(
-  Satisfaction ~ .,
-  data = rf_train,
-  ntree = 300,
-  mtry = 7,
-  importance = TRUE
+    randomForest(
+      Satisfaction ~ .,
+      data = rf_datasets[[i]]$train,
+      ntree = 100,
+      mtry = unname(best_mtry[i]),
+      importance = TRUE
+    )
+  }),
+  names(rf_datasets)
 )
 
-tuned_rf_model
+tuned_rf_model <- tuned_rf_models[["zbirne ocene"]]
+
+tuned_rf_models
 ```
 
 ```{r}
-tuned_rf_prob <- predict(
-  tuned_rf_model,
-  newdata = rf_test,
-  type = "prob"
-)[, "Satisfied"]
+tuned_rf_evaluations <- setNames(
+  lapply(seq_along(tuned_rf_models), function(i) {
+    varijanta <- names(tuned_rf_models)[i]
 
-tuned_rf_evaluation <- evaluate_model(
-  actual = rf_test$Satisfaction,
-  prob_satisfied = tuned_rf_prob,
-  model_name = "Random forest - podešeni"
+    tuned_rf_prob <- predict(
+      tuned_rf_models[[i]],
+      newdata = rf_datasets[[varijanta]]$test,
+      type = "prob"
+    )[, "Satisfied"]
+
+    evaluate_model(
+      actual = rf_datasets[[varijanta]]$test$Satisfaction,
+      prob_satisfied = tuned_rf_prob,
+      model_name = paste(
+        "Random forest - podeseni -",
+        rf_variant_labels[i]
+      )
+    )
+  }),
+  names(tuned_rf_models)
 )
+
+tuned_rf_metrics <- bind_rows(
+  lapply(tuned_rf_evaluations, `[[`, "metrics")
+)
+
+tuned_rf_evaluation <- tuned_rf_evaluations[["zbirne ocene"]]
 
 tuned_rf_evaluation$metrics
 tuned_rf_evaluation$confusion
-
+tuned_rf_metrics
+```
+```{r}
 model_results <- model_results %>%
-  filter(!grepl("^(Drvo|Random forest)", Model)) %>%
-  bind_rows(
-    tree_evaluation$metrics, tuned_tree_evaluation$metrics,
-    rf_evaluation$metrics, tuned_rf_evaluation$metrics
-  )
+  filter(!grepl("^Random forest - podeseni", Model)) %>%
+  bind_rows(tuned_rf_metrics)
+
+model_results %>%
+  filter(grepl("^Random forest", Model))
 ```
 
 
-Podešeni random forest ostvario je tačnost od 93,02% na test skupu. Precision iznosi 93,59%, recall 90,11%, F1 mera 91,82%, a AUC 0,977. Ove vrednosti pokazuju veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
+Podešeni random forest modeli ostvarili su veoma dobre rezultate na test skupu. Najbolje performanse ima varijanta sa pojedinačnim ocenama, sa tačnošću od 96,20%, F1 merom od 95,56% i AUC vrednošću 0,994. Varijanta sa zbirnim ocenama ostvarila je tačnost od 92,86%, F1 meru od 91,64% i AUC od 0,976.
 
-Model je pravilno klasifikovao 10.170 zadovoljnih i 13.995 nezadovoljnih putnika. Pogrešno je klasifikovao 1.116 zadovoljnih putnika kao nezadovoljno i 696 nezadovoljnih putnika kao zadovoljno.
-
-U odnosu na osnovni random forest, podešeni model je smanjio OOB grešku sa 7,27% na 7,15%, a tačnost na test skupu povećana je sa 92,86% na 93,02%. Najbolja vrednost parametra `mtry` bila je 7.
+Podešavanje parametra mtry donelo je samo mala poboljšanja u odnosu na osnovne modele. Kod varijante sa pojedinačnim ocenama rezultati su blago poboljšani, dok su kod zbirnih ocena praktično ostali nepromenjeni. Kod varijante bez ocena usluga poboljšanje je minimalno, a kod varijante bez Not_Rated_Count AUC je blago smanjen. Zbog toga se podešavanje može smatrati korisnim za izbor parametra, ali nije dovelo do značajnog poboljšanja svih varijanti.
 
 
 ## Važnost promenljivih u podešenom random forest modelu
@@ -3569,11 +3652,11 @@ ggplot(tuned_rf_importance, aes(
 ```
 
 
-U podešenom random forest modelu najvažnija promenljiva je `Type_of_Travel`, sa relativnom važnošću od 100%. Slede `Booking_Score` (86,28%), `Handling_Score` (83,21%), `Digital_Score` (79,79%), `Not_Rated_Count` (78,72%) i `Customer_Type` (75,55%).
+U podešenom random forest modelu najvažnija promenljiva je Type_of_Travel, sa relativnom važnošću od 100%. Slede Booking_Score (89,64%), Digital_Score (78,50%), Not_Rated_Count (77,33%), Handling_Score (75,25%) i Customer_Type (74,51%).
 
-Ovi rezultati pokazuju da svrha putovanja, ocene organizacije putovanja, osoblja i digitalnih usluga, kao i broj neocenjenih usluga, imaju najveći prediktivni značaj. `Gender` ima najmanju važnost, dok kašnjenja i dužina leta imaju umeren ili manji doprinos.
+Najmanju relativnu važnost imaju Gender (10,04%), Delay_Difference (10,82%) i Departure_Delay_in_Minutes (12,49%). Cabin_Score, Age, Class i Flight_Distance imaju umeren doprinos predviđanju zadovoljstva putnika.
 
-Važnost promenljivih predstavlja njihov doprinos prediktivnoj tačnosti modela i ne dokazuje uzročno-posledični uticaj na zadovoljstvo putnika.
+Rezultati pokazuju da svrha putovanja, ocene rezervacije, digitalnih usluga i rukovanja, kao i broj neocenjenih usluga, imaju najveći prediktivni značaj u ovom modelu. Važnost promenljivih predstavlja njihov doprinos prediktivnoj tačnosti modela i ne dokazuje uzročno-posledični uticaj na zadovoljstvo putnika.
 
 # Gradient Boosting
 
