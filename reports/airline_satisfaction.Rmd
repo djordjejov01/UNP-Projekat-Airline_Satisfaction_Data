@@ -1,10 +1,10 @@
 ---
 title: "Airline satisfaction data"
 output:
+  html_document: default
+  pdf_document: default
   word_document: 
     reference_docx: template.docx
-  pdf_document: default
-  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -2596,29 +2596,52 @@ model_results <- data.frame()
 Pošto svi modeli koriste iste varijante skupa promenljivih, one se definišu na jednom mestu, kao spiskovi imena kolona. Tako se eventualna izmena (npr. izbacivanje jedne promenljive) sprovodi na jednom mestu i važi za sve modele.
 
 ```{r}
-person_vars <- c("Gender", "Customer_Type", "Type_of_Travel", "Class",
-                 "Age", "Flight_Distance",
-                 "Departure_Delay_in_Minutes", "Delay_Difference")
+person_vars <- c(
+  "Gender", "Customer_Type", "Type_of_Travel", "Class",
+  "Age", "Flight_Distance",
+  "Departure_Delay_in_Minutes", "Delay_Difference"
+)
 
-# Varijanta 1: pojedinačne ocene usluga
-vars_individual <- c(person_vars, rating_columns, "Not_Rated_Count")
+# Varijanta 1: pojedinačne ocene usluga + Not_Rated_Count
+vars_individual <- c(
+  person_vars,
+  rating_columns,
+  "Not_Rated_Count"
+)
 
-# Varijanta 2: zbirne ocene usluga
-vars_scores <- c(person_vars, "Cabin_Score", "Booking_Score",
-                 "Handling_Score", "Digital_Score", "Not_Rated_Count")
+# Varijanta 2: zbirne ocene usluga + Not_Rated_Count
+vars_scores <- c(
+  person_vars,
+  "Cabin_Score",
+  "Booking_Score",
+  "Handling_Score",
+  "Digital_Score",
+  "Not_Rated_Count"
+)
 
-# Varijanta 3: bez ocena usluga
+# Varijanta 3: bez ocena usluga i bez Not_Rated_Count
 vars_no_ratings <- person_vars
 
+# Varijanta 4: zbirne ocene usluga bez Not_Rated_Count
+vars_scores_no_nrc <- setdiff(vars_scores, "Not_Rated_Count")
+
 # Provera: broj promenljivih po varijanti i prisustvo svih kolona u skupu
-sapply(
-  list(pojedinacne = vars_individual, zbirne = vars_scores, bez_ocena = vars_no_ratings),
-  length
+
+
+varijante_promenljivih <- list(
+  "pojedinačne ocene" = vars_individual,
+  "zbirne ocene" = vars_scores,
+  "bez ocena usluga" = vars_no_ratings,
+  "zbirne ocene bez Not_Rated_Count" = vars_scores_no_nrc
 )
-all(c(vars_individual, vars_scores) %in% names(train_lr))
+
+sapply(varijante_promenljivih, length)
+
+
+all(unlist(varijante_promenljivih) %in% names(train_lr))
 ```
 
-Svaki model koristi jednu od ove tri varijante.
+Svaki model koristi jednu od ove četiri varijante skupa promenljivih, kako bi poređenje modela bilo fer i zasnovano na istim ulaznim podacima.
 
 # Logistička regresija
 
@@ -2966,34 +2989,75 @@ vaznost
 
 Drvo odlučivanja je klasifikacioni model koji sukcesivnim podelama podataka formira pravila za predviđanje ciljne promenljive. Svaka podela bira promenljivu i prag koji najbolje razdvajaju zadovoljne i nezadovoljne putnike.
 
-U ovom koraku formiramo osnovno drvo odlučivanja. Model se trenira na trening skupu, dok će se njegova uspešnost proceniti tek na test skupu. Koristimo zbirne ocene usluga (`Cabin_Score`, `Booking_Score`, `Handling_Score` i `Digital_Score`), zajedno sa osnovnim karakteristikama putnika i leta.
+U ovom koraku formiramo osnovno drvo odlučivanja. Model se trenira na trening skupu, dok će se njegova uspešnost proceniti tek na test skupu. Koristimo zbirne ocene usluga (`Cabin_Score`, `Booking_Score`,
+`Handling_Score` i `Digital_Score`) i `Not_Rated_Count`, zajedno sa
+osnovnim karakteristikama putnika i leta.
 
-U cilju fer poređenja sa modelima koji ne koriste broj neocenjenih usluga, za stablo odlučivanja je pripremljena i testirana varijanta skupa podataka bez obeležja `Not_Rated_Count`. Poređenjem performansi modela sa ovom promenljivom i bez nje potvrđen je njen značajni uticaj na prediktivnu moć stabala, s obzirom na to da struktura podela direktno integriše informaciju o broju neocenjenih stavki.
+Radi fer poređenja pripremljene su četiri varijante skupa promenljivih.
+U nastavku će se posebno uporediti varijante sa i bez promenljive
+`Not_Rated_Count`, kako bi se procenio njen doprinos prediktivnoj moći stabla.
 
 ```{r}
-# Varijanta bez Not_Rated_Count za poređenje
-vars_scores_no_nrc <- setdiff(vars_scores, "Not_Rated_Count")
 
-tree_train <- train_data %>%
-  select(Satisfaction, all_of(vars_scores_no_nrc))
+tree_datasets <- list(
+  "pojedinačne ocene" = list(
+    train = train_data %>%
+      select(Satisfaction, all_of(vars_individual)),
+    test = test_data %>%
+      select(Satisfaction, all_of(vars_individual))
+  ),
 
-tree_test <- test_data %>%
-  select(Satisfaction, all_of(vars_scores_no_nrc))
+  "zbirne ocene" = list(
+    train = train_data %>%
+      select(Satisfaction, all_of(vars_scores)),
+    test = test_data %>%
+      select(Satisfaction, all_of(vars_scores))
+  ),
 
-set.seed(123)
-tree_model <- rpart(
-  Satisfaction ~ .,
-  data = tree_train,
-  method = "class",
-  control = rpart.control(
-    cp = 0.01,
-    minbucket = 20,
-    xval = 5
+  "bez ocena usluga" = list(
+    train = train_data %>%
+      select(Satisfaction, all_of(vars_no_ratings)),
+    test = test_data %>%
+      select(Satisfaction, all_of(vars_no_ratings))
+  ),
+
+  "zbirne ocene bez Not_Rated_Count" = list(
+    train = train_data %>%
+      select(Satisfaction, all_of(vars_scores_no_nrc)),
+    test = test_data %>%
+      select(Satisfaction, all_of(vars_scores_no_nrc))
   )
 )
 
+sapply(tree_datasets, function(x) ncol(x$train))
+
+tree_train <- tree_datasets[["zbirne ocene"]]$train
+tree_test  <- tree_datasets[["zbirne ocene"]]$test
+
+tree_models <- lapply(names(tree_datasets), function(varijanta) {
+  set.seed(123)
+
+  rpart(
+    Satisfaction ~ .,
+    data = tree_datasets[[varijanta]]$train,
+    method = "class",
+    control = rpart.control(
+      cp = 0.01,
+      minbucket = 20,
+      xval = 5
+    )
+  )
+})
+
+names(tree_models) <- names(tree_datasets)
+
+tree_model <- tree_models[["zbirne ocene"]]
+tree_train <- tree_datasets[["zbirne ocene"]]$train
+tree_test  <- tree_datasets[["zbirne ocene"]]$test
+
 tree_model
 printcp(tree_model)
+
 ```
 
 
@@ -3034,11 +3098,61 @@ tree_evaluation$metrics
 tree_evaluation$confusion
 ```
 
-Osnovno drvo odlučivanja ostvarilo je tačnost od 86,07% na test skupu. Precision iznosi 80,21%, što znači da je među putnicima koje je model označio kao zadovoljne približno 80% zaista zadovoljno. Recall iznosi 90,18%, što pokazuje da model uspešno prepoznaje većinu zadovoljnih putnika. F1 mera iznosi 84,91%, dok AUC od 0,901 ukazuje na veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
+```{r}
+tree_basic_evaluations <- lapply(names(tree_models), function(varijanta) {
+  tree_prob <- predict(
+    tree_models[[varijanta]],
+    newdata = tree_datasets[[varijanta]]$test,
+    type = "prob"
+  )[, "Satisfied"]
 
-Matrica konfuzije pokazuje da je model pravilno klasifikovao 10.178 zadovoljnih i 12.180 nezadovoljnih putnika. Pogrešno je klasifikovano 1.108 zadovoljnih putnika kao nezadovoljno i 2.511 nezadovoljnih putnika kao zadovoljno.
+  evaluate_model(
+    actual = tree_datasets[[varijanta]]$test$Satisfaction,
+    prob_satisfied = tree_prob,
+    model_name = paste("Drvo odlučivanja - osnovno -", varijanta)
+  )
+})
 
-Najvažnija početna podela u stablu zasnovana je na promenljivoj `Class`. Kod putnika u poslovnoj klasi važnu ulogu imaju `Digital_Score` i `Handling_Score`, dok se kod putnika u klasama `Eco` i `Eco Plus` izdvajaju `Booking_Score`, `Not_Rated_Count`, `Type_of_Travel`, `Customer_Type` i `Cabin_Score`. Ovo pokazuje da se faktori povezani sa zadovoljstvom razlikuju između različitih grupa putnika.
+tree_basic_metrics <- bind_rows(
+  lapply(tree_basic_evaluations, `[[`, "metrics")
+)
+
+tree_basic_metrics
+
+model_results <- model_results %>%
+  filter(!grepl("^Drvo odlučivanja - osnovno", Model)) %>%
+  bind_rows(tree_basic_metrics)
+
+model_results
+```
+
+Za varijantu sa zbirnim ocenama i promenljivom `Not_Rated_Count`, osnovno
+stablo odlučivanja ostvarilo je tačnost od 86,07% na test skupu.
+Precision iznosi 80,21%, što znači da je među putnicima koje je model
+označio kao zadovoljne približno 80% zaista zadovoljno. Recall iznosi
+90,18%, što pokazuje da model uspešno prepoznaje većinu zadovoljnih
+putnika. F1 mera iznosi 84,91%, dok AUC od 0,901 ukazuje na veoma dobru
+sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
+
+Matrica konfuzije pokazuje da je model pravilno klasifikovao 10.178
+zadovoljnih i 12.180 nezadovoljnih putnika. Pogrešno je klasifikovao
+1.108 zadovoljnih putnika kao nezadovoljno i 2.511 nezadovoljnih putnika
+kao zadovoljno.
+
+Najvažnija početna podela u stablu zasnovana je na promenljivoj `Class`.
+Kod putnika u poslovnoj klasi važnu ulogu imaju `Digital_Score` i
+`Handling_Score`, dok se kod putnika u klasama `Eco` i `Eco Plus`
+izdvajaju `Booking_Score`, `Not_Rated_Count`, `Type_of_Travel`,
+`Customer_Type` i `Cabin_Score`. Ovo pokazuje da se faktori povezani sa
+zadovoljstvom razlikuju između različitih grupa putnika.
+
+Poređenje četiri varijante pokazuje da osnovno stablo najbolje rezultate
+ostvaruje sa pojedinačnim ocenama, za koje AUC iznosi 0,905. Zbirne ocene
+sa promenljivom `Not_Rated_Count` ostvaruju AUC od 0,901. Kada se koriste
+samo karakteristike putnika i leta, bez ocena usluga, AUC opada na 0,794.
+Izbacivanjem promenljive `Not_Rated_Count` iz varijante sa zbirnim
+ocenama AUC se smanjuje na 0,856. To potvrđuje da ocene usluga, kao i
+broj neocenjenih usluga, doprinose prediktivnoj moći stabla.
 
 
 ## Podešavanje stabla pomoću unakrsne validacije
@@ -3049,65 +3163,152 @@ Osnovno stablo je formirano sa početnom vrednošću parametra složenosti `cp =
 
 
 ```{r}
-set.seed(123)
-tree_cv <- rpart(
-  Satisfaction ~ .,
-  data = tree_train,
-  method = "class",
-  control = rpart.control(
-    cp = 0,
-    minbucket = 20,
-    xval = 5
-  )
-)
+tree_cv_models <- lapply(names(tree_datasets), function(varijanta) {
+  set.seed(123)
 
-tree_cp_table <- as.data.frame(tree_cv$cptable)
-tree_cp_table
+  rpart(
+    Satisfaction ~ .,
+    data = tree_datasets[[varijanta]]$train,
+    method = "class",
+    control = rpart.control(
+      cp = 0,
+      minbucket = 20,
+      xval = 5
+    )
+  )
+})
+
+names(tree_cv_models) <- names(tree_datasets)
+
+best_cps <- sapply(tree_cv_models, function(model) {
+  cp_table <- as.data.frame(model$cptable)
+  cp_table$CP[which.min(cp_table$xerror)]
+})
+
+best_cps
 ```
 
 
 ```{r}
-best_row <- which.min(tree_cp_table$xerror)
-best_cp <- tree_cp_table$CP[best_row]
+tuned_tree_models <- lapply(names(tree_cv_models), function(varijanta) {
+  prune(
+    tree_cv_models[[varijanta]],
+    cp = best_cps[[varijanta]]
+  )
+})
 
-best_cp
+names(tuned_tree_models) <- names(tree_cv_models)
 
-tuned_tree <- prune(
-  tree_cv,
-  cp = best_cp
-)
+# Glavno podešeno stablo ostaje varijanta:
+# zbirne ocene + Not_Rated_Count
+tuned_tree <- tuned_tree_models[["zbirne ocene"]]
 
 tuned_tree
 ```
 
 
 ```{r}
-tuned_tree_prob <- predict(
-  tuned_tree,
-  newdata = tree_test,
-  type = "prob"
-)[, "Satisfied"]
-
-tuned_tree_evaluation <- evaluate_model(
-  actual = tree_test$Satisfaction,
-  prob_satisfied = tuned_tree_prob,
-  model_name = "Drvo odlučivanja - podešeno"
+variant_labels <- c(
+  "pojedinacne ocene",
+  "zbirne ocene",
+  "bez ocena usluga",
+  "zbirne ocene bez Not_Rated_Count"
 )
+
+tuned_tree_evaluations <- setNames(
+  lapply(seq_along(tuned_tree_models), function(i) {
+    varijanta <- names(tuned_tree_models)[i]
+
+    tuned_tree_prob <- predict(
+      tuned_tree_models[[varijanta]],
+      newdata = tree_datasets[[varijanta]]$test,
+      type = "prob"
+    )[, "Satisfied"]
+
+    evaluate_model(
+      actual = tree_datasets[[varijanta]]$test$Satisfaction,
+      prob_satisfied = tuned_tree_prob,
+      model_name = paste(
+        "Drvo odlucivanja - podeseno -",
+        variant_labels[i]
+      )
+    )
+  }),
+  names(tuned_tree_models)
+)
+
+tuned_tree_metrics <- bind_rows(
+  lapply(tuned_tree_evaluations, `[[`, "metrics")
+)
+
+tuned_tree_evaluation <- tuned_tree_evaluations[["zbirne ocene"]]
 
 tuned_tree_evaluation$metrics
 tuned_tree_evaluation$confusion
+
+tuned_tree_metrics
+```
+```{r}
+model_results <- model_results %>%
+  filter(!grepl("podeseno", Model)) %>%
+  bind_rows(tuned_tree_metrics)
+
+model_results %>%
+  filter(grepl("Drvo", Model))
+```
+
+```{r}
+tree_size <- data.frame(
+  Varijanta = names(tuned_tree_models),
+  Broj_listova = sapply(
+    tuned_tree_models,
+    function(model) sum(model$frame$var == "<leaf>")
+  ),
+  Broj_podela = sapply(
+    tuned_tree_models,
+    function(model) sum(model$frame$var != "<leaf>")
+  )
+)
+
+tree_size
+```
+
+```{r}
+tuned_tree_metrics %>%
+  mutate(across(where(is.numeric), ~ round(., 4)))
 ```
 
 
+Za varijantu sa zbirnim ocenama i promenljivom `Not_Rated_Count`, podešeno
+stablo ostvarilo je tačnost od 92,22% na test skupu. Precision iznosi
+93,05%, recall 88,71%, F1 mera 90,83%, a AUC 0,959. U odnosu na osnovno
+stablo iste varijante, čija je tačnost iznosila 86,07%, podešeno stablo
+ostvaruje značajno bolje rezultate.
 
-Podešeno stablo ostvarilo je tačnost od 92,29% na test skupu, što predstavlja značajno poboljšanje u odnosu na osnovno stablo, čija je tačnost iznosila 86,07%. AUC je povećan sa 0,901 na 0,959, što pokazuje da podešeno stablo veoma dobro razlikuje zadovoljne od nezadovoljnih putnika.
+Matrica konfuzije pokazuje da je model pravilno klasifikovao 10.012
+zadovoljnih i 13.943 nezadovoljna putnika. Pogrešno je klasifikovao 1.274
+zadovoljna putnika kao nezadovoljna i 748 nezadovoljnih putnika kao
+zadovoljno.
 
-Precision iznosi 92,82%, što znači da je većina putnika označenih kao zadovoljna zaista zadovoljna. Recall iznosi 89,15%, pa model uspešno prepoznaje najveći deo zadovoljnih putnika. F1 mera od 90,95% pokazuje dobar balans između preciznosti i odziva.
+Unakrsna validacija je za varijantu sa zbirnim ocenama i promenljivom
+`Not_Rated_Count` odabrala vrednost parametra složenosti
+`cp = 0,00007753`. Podešeno stablo je odabrano isključivo na osnovu
+unakrsne validacije na trening skupu, dok je test skup korišćen samo za
+konačnu procenu kvaliteta modela.
 
-Matrica konfuzije pokazuje da je model pravilno klasifikovao 10.062 zadovoljna i 13.913 nezadovoljnih putnika. Pogrešno je klasifikovao 1.224 zadovoljna putnika kao nezadovoljna i 778 nezadovoljnih putnika kao zadovoljna.
+Poređenje četiri podešena stabla pokazuje da najbolje rezultate ostvaruje
+varijanta sa pojedinačnim ocenama: tačnost je 95,21%, F1 mera 94,39%, a
+AUC 0,989. Zbirne ocene sa `Not_Rated_Count` ostvaruju tačnost 92,22%,
+F1 meru 90,83% i AUC 0,959. Kod varijante bez ocena usluga AUC opada na
+0,855, dok varijanta sa zbirnim ocenama bez `Not_Rated_Count` ostvaruje
+AUC 0,950. To pokazuje da ocene usluga imaju veliki značaj, a da
+izbacivanje `Not_Rated_Count` smanjuje performanse u odnosu na varijantu
+koja ga uključuje.
 
-Unakrsna validacija je odabrala vrednost parametra složenosti `cp = 0,00009599`. U poređenju sa osnovnim stablom, podešeno stablo ima veći broj podela i složeniju strukturu, ali ostvaruje znatno bolje rezultate na test skupu. Podešeno stablo je odabrano na osnovu unakrsne validacije na trening skupu, a rezultat na test skupu potvrđuje da je poboljšanje stvarno.
-
+Tabela `tree_size` prikazuje broj listova i broj podela u svakom
+podešenom stablu. Zbog veoma malih optimalnih vrednosti `cp`, podešena
+stabla imaju složeniju strukturu od osnovnih stabala. Njihovu složenost
+treba posmatrati zajedno sa rezultatima na test skupu.
 
 ## Važnost promenljivih u podešenom stablu
 
