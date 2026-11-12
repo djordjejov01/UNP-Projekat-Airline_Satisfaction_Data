@@ -1,10 +1,10 @@
 ---
 title: "Airline satisfaction data"
 output:
-  html_document: default
-  pdf_document: default
   word_document: 
     reference_docx: template.docx
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -2585,7 +2585,7 @@ Za modelovanje su pripremljena dva para skupova:
 | `train_data`, `test_data` | originalne ocene usluga (vrednost 0 = neocenjeno) | stabla odlučivanja, random forest, boosting |
 | `train_lr`, `test_lr` | nule u ocenama zamenjene medijanom iz trening skupa | logistička regresija i drugi linearni modeli |
 
-Oba para sadrže iste putnike u istom rasporedu i razlikuju se samo po ocenama usluga. Svaki model koristi jednu od tri varijante skupa promenljivih: pojedinačne ocene, zbirne ocene ili samo karakteristike putnika i leta (bez ocena usluga). Poslednja varijanta pokazuje u kojoj meri se zadovoljstvo može predvideti i bez ocena, koje se prikupljaju u istoj anketi kao i zadovoljstvo. Rezultati svih modela upisuju se u zajedničku tabelu `model_results`, koja se na kraju koristi za poređenje.
+Svaki model koristi jednu od četiri varijante skupa promenljivih: pojedinačne ocene, zbirne ocene, bez ocena usluga i zbirne ocene bez promenljive Not_Rated_Count
 
 ```{r}
 model_results <- data.frame()
@@ -2831,7 +2831,7 @@ data.frame(
 
 ## Varijante skupa promenljivih
 
-Konačna specifikacija primenjuje se na tri varijante skupa promenljivih definisane ranije: sa zbirnim ocenama usluga, sa 13 pojedinačnih ocena i bez ocena usluga. Zajednički deo svih varijanti čine karakteristike putnika i leta sa istim transformacijama (kvadrat starosti, logaritam kašnjenja pri polasku i interakcije klase i tipa korisnika sa svrhom putovanja). Kod varijante sa pojedinačnim ocenama interakcija sa svrhom putovanja dodaje se za svaku ocenu. Varijanta bez ocena ne sadrži ni `Not_Rated_Count`, jer ta promenljiva potiče iz ocena usluga. Dodajemo i četvrtu varijantu, zbirne ocene bez `Not_Rated_Count`, jer je ta promenljiva imala neočekivano jak efekat, pa proveravamo koliko se model oslanja na nju.
+Konačna specifikacija primenjuje se na četiri varijante skupa promenljivih definisane ranije: sa zbirnim ocenama usluga, sa pojedinačnim ocenama, bez ocena usluga i sa zbirnim ocenama bez promenljive Not_Rated_Count. Zajednički deo svih varijanti čine karakteristike putnika i leta sa istim transformacijama: kvadrat starosti, logaritam kašnjenja pri polasku i interakcije klase i tipa korisnika sa svrhom putovanja. Kod varijante sa pojedinačnim ocenama interakcija sa svrhom putovanja dodaje se za svaku ocenu. Varijanta bez ocena usluga ne sadrži ni Not_Rated_Count, jer ta promenljiva potiče iz ocena usluga. Četvrta varijanta, sa zbirnim ocenama bez Not_Rated_Count, uvedena je da bi se proverilo koliko se model oslanja na ovu promenljivu.
 
 ```{r}
 person_terms <- c(
@@ -3357,7 +3357,7 @@ Random forest je ansambl metoda koja kombinuje veliki broj stabala odlučivanja.
 
 ## Osnovni random forest model
 
-Za početni model koristićemo 300 stabala odlučivanja. Broj promenljivih koje se razmatraju pri svakoj podeli (`mtry`) ostavićemo na podrazumevanoj vrednosti, koju paket `randomForest` određuje za klasifikaciju. Koristićemo iste trening i test podatke kao kod podešenog stabla, kako bi poređenje modela bilo objektivno.
+Za početni model koristićemo 100 stabala odlučivanja. Broj promenljivih koje se razmatraju pri svakoj podeli (`mtry`) ostavićemo na podrazumevanoj vrednosti, koju paket `randomForest` određuje za klasifikaciju. Koristićemo iste trening i test podatke kao kod podešenog stabla, kako bi poređenje modela bilo objektivno.
 
 ```{r}
 rf_datasets <- tree_datasets
@@ -3368,7 +3368,7 @@ rf_models <- lapply(names(rf_datasets), function(varijanta) {
   randomForest(
     Satisfaction ~ .,
     data = rf_datasets[[varijanta]]$train,
-    ntree = 300,
+    ntree = 100,
     importance = TRUE
   )
 })
@@ -3438,13 +3438,13 @@ model_results %>%
   filter(grepl("^Random forest - osnovni", Model))
 ```
 
-Osnovni random forest ostvario je tačnost od 92,86% na test skupu. Precision iznosi 93,19%, recall 90,15%, F1 mera 91,64%, a AUC 0,976. Ove vrednosti ukazuju na veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
+Osnovni random forest ostvario je tačnost od 92,87% na test skupu. Precision iznosi 93,07%, recall 90,32%, F1 mera 91,67%, a AUC 0,976. Ove vrednosti ukazuju na veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika.
 
-Model je pravilno klasifikovao 10.174 zadovoljna i 13.947 nezadovoljnih putnika. Pogrešno je klasifikovao 1.112 zadovoljnih putnika kao nezadovoljno i 744 nezadovoljna putnika kao zadovoljno.
+Model je pravilno klasifikovao 10.193 zadovoljna i 13.932 nezadovoljna putnika. Pogrešno je klasifikovao 1.093 zadovoljna putnika kao nezadovoljna i 759 nezadovoljnih putnika kao zadovoljne.
 
-OOB greška od 7,27% predstavlja internu procenu greške tokom treniranja random forest modela. Konačne metrike modela procenjuju se na test skupu, koji nije korišćen za treniranje modela.
+OOB greška od 7,37% predstavlja internu procenu greške tokom treniranja random forest modela. Konačne metrike modela procenjuju se na test skupu, koji nije korišćen za treniranje modela.
 
-U poređenju sa podešenim stablom odlučivanja, osnovni random forest ostvaruje veću tačnost (92,86% prema 92,22%), F1 meru (91,64% prema 90,83%) i AUC (0,976 prema 0,959). To pokazuje da kombinovanje većeg broja stabala daje bolje i stabilnije predikcije od jednog stabla odlučivanja.
+U poređenju sa podešenim stablom odlučivanja, osnovni random forest ostvaruje veću tačnost (92,87% prema 92,22%), F1 meru (91,67% prema 90,83%) i AUC (0,976 prema 0,959). To pokazuje da kombinovanje većeg broja stabala daje bolje i stabilnije predikcije od jednog stabla odlučivanja.
 
 
 ## Važnost promenljivih u random forest modelu
