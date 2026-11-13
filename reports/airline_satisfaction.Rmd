@@ -3906,30 +3906,6 @@ Varijanta sa zbirnim ocenama ostvaruje tačnost od 92,91%, F1 meru 91,67% i AUC 
 
 Najslabije rezultate ostvaruje model bez ocena usluga, sa tačnošću 80,44%, F1 merom 77,80% i AUC vrednošću 0,870. Rezultati potvrđuju da ocene usluga nose najveći deo prediktivne informacije, dok Not_Rated_Count dodatno poboljšava rezultate kod zbirnih ocena.
 
-```{r}
-tree_basic_evaluations <- lapply(names(tree_models), function(varijanta) {
-  tree_prob <- predict(
-    tree_models[[varijanta]],
-    newdata = tree_datasets[[varijanta]]$test,
-    type = "prob"
-  )[, "Satisfied"]
-
-  evaluate_model(
-    actual = tree_datasets[[varijanta]]$test$Satisfaction,
-    prob_satisfied = tree_prob,
-    model_name = paste(
-      "Drvo odlučivanja - osnovno -",
-      varijanta
-    )
-  )
-})
-
-tree_basic_metrics <- bind_rows(
-  lapply(tree_basic_evaluations, `[[`, "metrics")
-)
-
-tree_basic_metrics
-```
 
 
 ```{r}
