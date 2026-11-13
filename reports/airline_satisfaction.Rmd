@@ -3034,9 +3034,10 @@ sapply(tree_datasets, function(x) ncol(x$train))
 tree_train <- tree_datasets[["zbirne ocene"]]$train
 tree_test  <- tree_datasets[["zbirne ocene"]]$test
 
+set.seed(123)
+
 tree_models <- lapply(names(tree_datasets), function(varijanta) {
   set.seed(123)
-
   rpart(
     Satisfaction ~ .,
     data = tree_datasets[[varijanta]]$train,
@@ -3163,9 +3164,10 @@ Osnovno stablo je formirano sa početnom vrednošću parametra složenosti `cp =
 
 
 ```{r}
+set.seed(123)
+
 tree_cv_models <- lapply(names(tree_datasets), function(varijanta) {
   set.seed(123)
-
   rpart(
     Satisfaction ~ .,
     data = tree_datasets[[varijanta]]$train,
@@ -3273,6 +3275,7 @@ tree_size <- data.frame(
 tree_size
 ```
 
+
 ```{r}
 tuned_tree_metrics %>%
   mutate(across(where(is.numeric), ~ round(., 4)))
@@ -3305,10 +3308,9 @@ AUC 0,950. To pokazuje da ocene usluga imaju veliki značaj, a da
 izbacivanje `Not_Rated_Count` smanjuje performanse u odnosu na varijantu
 koja ga uključuje.
 
-Tabela `tree_size` prikazuje broj listova i broj podela u svakom
-podešenom stablu. Zbog veoma malih optimalnih vrednosti `cp`, podešena
-stabla imaju složeniju strukturu od osnovnih stabala. Njihovu složenost
-treba posmatrati zajedno sa rezultatima na test skupu.
+Tabela prikazuje broj listova i podela u svakom podešenom stablu. Stablo sa pojedinačnim ocenama ima 177 listova i 176 podela, dok stablo sa zbirnim ocenama ima 198 listova i 197 podela. Varijanta bez ocena usluga je znatno jednostavnija i ima 47 listova i 46 podela. Najveći broj listova ima stablo sa zbirnim ocenama bez promenljive Not_Rated_Count, sa 211 listova i 210 podela.
+
+Pošto svaka interna podela stabla, uz početni čvor, daje jednu dodatnu završnu granu, broj podela je za jedan manji od broja listova. Male optimalne vrednosti parametra cp omogućile su složenija stabla, ali njihovu opravdanost treba procenjivati zajedno sa rezultatima na test skupu, a ne samo na osnovu broja listova.
 
 ## Važnost promenljivih u podešenom stablu
 
@@ -3608,11 +3610,15 @@ tuned_rf_metrics
 ```
 ```{r}
 model_results <- model_results %>%
-  filter(!grepl("^Random forest - podeseni", Model)) %>%
-  bind_rows(tuned_rf_metrics)
+  filter(!grepl("^(Drvo|Random forest)", Model)) %>%
+  bind_rows(
+    tree_basic_metrics,
+    tuned_tree_metrics,
+    rf_metrics,
+    tuned_rf_metrics
+  )
 
-model_results %>%
-  filter(grepl("^Random forest", Model))
+model_results
 ```
 
 
@@ -3669,11 +3675,10 @@ Za izgradnju modela koristićemo paket `gbm` (Generalized Boosted Regression Mod
 U ovom koraku treniramo osnovni model sa 300 stabala, dubinom interakcije (maksimalnim brojem čvorova po stablu) 4, i brzinom učenja (shrinkage) 0,05. Treniranje se vrši nad zajedničkim skupovima `train_data` i varijantom sa zbirnim ocenama `vars_scores`.
 
 ```{r}
-library(gbm)
 
 set.seed(123)
 
-# Priprema podataka za gbm nad ugovorenim skupovima train_data i test_data
+# Priprema podataka za gbm nad zajednickim skupovima train_data i test_data
 gbm_train <- train_data %>%
   select(Satisfied_Num, all_of(vars_scores))
 
@@ -3724,14 +3729,240 @@ if (nrow(model_results) > 0) {
 model_results <- bind_rows(model_results, gbm_evaluation$metrics)
 ```
 
-Osnovni gradient boosting model ostvario je tačnost od 93,02% (uz F1 meru od 91,82% i AUC od 0,977) na test skupu, čime je potvrdio performanse u potpunosti uporedive sa podešenim random forest modelom.
+Osnovni gradient boosting model ostvario je tačnost od 91,73%, F1 meru od 90,25% i AUC od 0,971 na test skupu. Model je pravilno klasifikovao 9.943 zadovoljna i 13.885 nezadovoljnih putnika. Pogrešno je klasifikovao 1.343 zadovoljna putnika kao nezadovoljna i 806 nezadovoljnih putnika kao zadovoljne.
+
+Rezultati pokazuju veoma dobru sposobnost modela da razlikuje zadovoljne od nezadovoljnih putnika. U poređenju sa podešenim random forest modelom, osnovni gradient boosting ima nešto slabiju tačnost, F1 meru i AUC, ali i dalje ostvaruje visoke performanse.
+
+
+## Podešavanje Gradient Boosting modela unakrsnom validacijom
+
+```{r gbm-tuning, cache=TRUE}
+gbm_tuning <- expand.grid(
+  interaction.depth = 2:6,
+  shrinkage = c(0.05, 0.1)
+)
+
+gbm_tuning_results <- lapply(seq_len(nrow(gbm_tuning)), function(i) {
+  params <- gbm_tuning[i, ]
+
+  set.seed(123)
+
+  model <- gbm(
+    Satisfied_Num ~ .,
+    data = gbm_train,
+    distribution = "bernoulli",
+    n.trees = 3000,
+    interaction.depth = params$interaction.depth,
+    shrinkage = params$shrinkage,
+    bag.fraction = 0.8,
+    train.fraction = 1.0,
+    cv.folds = 5,
+    verbose = FALSE
+  )
+
+  best_trees <- gbm.perf(
+    model,
+    method = "cv",
+    plot.it = FALSE
+  )
+
+  data.frame(
+    interaction.depth = params$interaction.depth,
+    shrinkage = params$shrinkage,
+    best_trees = best_trees,
+    cv_error = min(model$cv.error)
+  )
+})
+
+gbm_tuning_results <- bind_rows(gbm_tuning_results)
+
+gbm_tuning_results
+```
+
+```{r}
+best_gbm <- gbm_tuning_results %>%
+  arrange(cv_error) %>%
+  slice(1)
+
+best_gbm
+```
+
+Najbolja kombinacija u sprovedenoj pretrazi ima dubinu interakcije 6 i shrinkage 0,05, uz najmanju procenjenu grešku 0,3553. Pošto je optimalan broj stabala dostigao gornju granicu pretrage od 3000, rezultat treba tumačiti oprezno.
+
+## Završni podešeni Gradient Boosting model
+
+Na osnovu unakrsne validacije za konačni model biramo dubinu interakcije 6, `shrinkage = 0,05` i 3000 stabala.
+
+```{r}
+best_depth <- best_gbm$interaction.depth[[1]]
+best_shrinkage <- best_gbm$shrinkage[[1]]
+best_n_trees <- best_gbm$best_trees[[1]]
+
+set.seed(123)
+
+tuned_gbm_model <- gbm(
+  Satisfied_Num ~ .,
+  data = gbm_train,
+  distribution = "bernoulli",
+  n.trees = best_n_trees,
+  interaction.depth = best_depth,
+  shrinkage = best_shrinkage,
+  bag.fraction = 0.8,
+  train.fraction = 1.0,
+  verbose = FALSE
+)
+
+tuned_gbm_prob <- predict(
+  tuned_gbm_model,
+  newdata = gbm_test,
+  n.trees = best_n_trees,
+  type = "response"
+)
+
+tuned_gbm_evaluation <- evaluate_model(
+  actual = test_data$Satisfaction,
+  prob_satisfied = tuned_gbm_prob,
+  model_name = "Gradient boosting - podešeni - zbirne ocene"
+)
+
+tuned_gbm_evaluation$metrics
+tuned_gbm_evaluation$confusion
+```
+
+```{r}
+model_results <- model_results %>%
+  filter(!grepl("^Gradient boosting - podešeni", Model)) %>%
+  bind_rows(tuned_gbm_evaluation$metrics)
+
+model_results
+```
+Podešeni gradient boosting model ostvario je tačnost od 92,91%, precision 93,61%, recall 89,80%, F1 meru 91,67% i AUC 0,979. Model je pravilno klasifikovao 10.135 zadovoljnih i 13.999 nezadovoljnih putnika. Pogrešno je klasifikovao 1.151 zadovoljnih putnika kao nezadovoljne i 692 nezadovoljna putnika kao zadovoljne. U odnosu na osnovni gradient boosting model, podešavanje je poboljšalo sve glavne metrike.
+
+## Podešeni GBM za ostale varijante promenljivih
+
+```{r}
+gbm_datasets <- list(
+  "pojedinačne ocene" = list(
+    train = train_data %>%
+      select(Satisfied_Num, all_of(vars_individual)),
+    test = test_data %>%
+      select(Satisfied_Num, all_of(vars_individual))
+  ),
+  "bez ocena usluga" = list(
+    train = train_data %>%
+      select(Satisfied_Num, all_of(vars_no_ratings)),
+    test = test_data %>%
+      select(Satisfied_Num, all_of(vars_no_ratings))
+  ),
+  "zbirne ocene bez Not_Rated_Count" = list(
+    train = train_data %>%
+      select(Satisfied_Num, all_of(vars_scores_no_nrc)),
+    test = test_data %>%
+      select(Satisfied_Num, all_of(vars_scores_no_nrc))
+  )
+)
+
+tuned_gbm_variants <- lapply(names(gbm_datasets), function(varijanta) {
+  set.seed(123)
+
+  model <- gbm(
+    Satisfied_Num ~ .,
+    data = gbm_datasets[[varijanta]]$train,
+    distribution = "bernoulli",
+    n.trees = best_n_trees,
+    interaction.depth = best_depth,
+    shrinkage = best_shrinkage,
+    bag.fraction = 0.8,
+    train.fraction = 1.0,
+    verbose = FALSE
+  )
+
+  prob <- predict(
+    model,
+    newdata = gbm_datasets[[varijanta]]$test,
+    n.trees = best_n_trees,
+    type = "response"
+  )
+
+  evaluate_model(
+    actual = test_data$Satisfaction,
+    prob_satisfied = prob,
+    model_name = paste("Gradient boosting - podešeni -", varijanta)
+  )
+})
+
+names(tuned_gbm_variants) <- names(gbm_datasets)
+
+tuned_gbm_variant_metrics <- bind_rows(
+  lapply(tuned_gbm_variants, `[[`, "metrics")
+)
+
+tuned_gbm_variant_metrics
+```
+
+Podešeni GBM modeli pokazuju najbolje rezultate kada se koriste pojedinačne ocene usluga. Tačnost iznosi 96,22%, F1 mera 95,58%, a AUC 0,995.
+
+Varijanta sa zbirnim ocenama ostvaruje tačnost od 92,91%, F1 meru 91,67% i AUC 0,979, dok varijanta sa zbirnim ocenama bez Not_Rated_Count ima nešto slabije rezultate: tačnost 92,04%, F1 meru 90,60% i AUC 0,972.
+
+Najslabije rezultate ostvaruje model bez ocena usluga, sa tačnošću 80,44%, F1 merom 77,80% i AUC vrednošću 0,870. Rezultati potvrđuju da ocene usluga nose najveći deo prediktivne informacije, dok Not_Rated_Count dodatno poboljšava rezultate kod zbirnih ocena.
+
+```{r}
+tree_basic_evaluations <- lapply(names(tree_models), function(varijanta) {
+  tree_prob <- predict(
+    tree_models[[varijanta]],
+    newdata = tree_datasets[[varijanta]]$test,
+    type = "prob"
+  )[, "Satisfied"]
+
+  evaluate_model(
+    actual = tree_datasets[[varijanta]]$test$Satisfaction,
+    prob_satisfied = tree_prob,
+    model_name = paste(
+      "Drvo odlučivanja - osnovno -",
+      varijanta
+    )
+  )
+})
+
+tree_basic_metrics <- bind_rows(
+  lapply(tree_basic_evaluations, `[[`, "metrics")
+)
+
+tree_basic_metrics
+```
+
+
+```{r}
+model_results <- model_results %>%
+  filter(!grepl("^(Drvo|Random forest|Gradient boosting)", Model)) %>%
+  bind_rows(
+    tree_basic_metrics,
+    tuned_tree_metrics,
+    rf_metrics,
+    tuned_rf_metrics,
+    gbm_evaluation$metrics,
+    tuned_gbm_evaluation$metrics,
+    tuned_gbm_variant_metrics
+  )
+
+model_results_sorted <- model_results %>%
+  arrange(desc(AUC)) %>%
+  mutate(across(where(is.numeric), ~ round(., 4)))
+
+model_results_sorted
+```
+
 
 ## Važnost promenljivih u Gradient Boosting modelu
 
 Funkcija `summary.gbm` računa relativni uticaj (relative influence) svake promenljive na osnovu smanjenja devijacije pri podelama u stablima.
 
 ```{r}
-gbm_importance <- summary(gbm_model, n.trees = 300, plotit = FALSE)
+gbm_importance <- summary(
+  tuned_gbm_model,
+  n.trees = best_n_trees,
+  plotit = FALSE
+)
 
 gbm_importance <- gbm_importance %>%
   rename(Promenljiva = var, Vaznost = rel.inf) %>%
@@ -3757,7 +3988,48 @@ ggplot(head(gbm_importance, 10), aes(
   )
 ```
 
-Prema relativnom uticaju, najvažnije promenljive u gradient boosting modelu su  Digital_Score, Type_of_Travel, Class  i Cabin_Score. Ovi rezultati potvrđuju zaključke iz prethodnih modela da klasa leta i ključne ocene usluga nose najveću prediktivnu moć za zadovoljstvo putnika.
+Prema relativnom uticaju, najvažnija promenljiva u podešenom gradient boosting modelu je Digital_Score, sa relativnim uticajem od 24,59%. Slede Type_of_Travel sa 18,16%, Class sa 15,32% i Booking_Score sa 11,14%. Značajan doprinos imaju i Cabin_Score, Customer_Type i Handling_Score, dok Not_Rated_Count ima manji, ali primetan uticaj od 4,36%.
+
+Ovi rezultati pokazuju da digitalne usluge, svrha i klasa putovanja, kao i ocene organizacije i kabine, nose najveći deo prediktivne informacije. Relativna važnost opisuje doprinos predviđanju u ovom modelu i ne predstavlja dokaz uzročno-posledične veze.
+
+```{r}
+importance_table <- bind_rows(
+  tree_importance %>%
+    transmute(
+      Model = "Podešeno stablo",
+      Promenljiva,
+      Vaznost = Relativna_vaznost
+    ),
+  tuned_rf_importance %>%
+    transmute(
+      Model = "Podešeni random forest",
+      Promenljiva,
+      Vaznost = Relativna_vaznost
+    ),
+  gbm_importance %>%
+    transmute(
+      Model = "Podešeni GBM",
+      Promenljiva,
+      Vaznost = Relativna_vaznost
+    ),
+  vaznost %>%
+    transmute(
+      Model = "Logistička regresija",
+      Promenljiva = Grupa,
+      Vaznost = Porast_AIC
+    )
+) %>%
+  arrange(Model, desc(Vaznost))
+
+importance_table
+```
+
+Objedinjena tabela prikazuje važnost promenljivih prema četiri različita kriterijuma. Kod podešenog stabla, random foresta i GBM-a važnost predstavlja relativni doprinos promenljive predikciji, dok je kod logističke regresije prikazan porast AIC-a nakon izbacivanja odgovarajuće grupe promenljivih. Zbog različitih skala, vrednosti se ne porede direktno između modela, već se analiziraju rangovi promenljivih unutar svakog modela.
+
+Digital_Score, Type_of_Travel, Class, Booking_Score i Handling_Score pojavljuju se među važnijim promenljivama u više modela. To pokazuje da digitalne usluge, svrha i klasa putovanja, kao i kvalitet usluga, imaju stabilan prediktivni značaj. Not_Rated_Count je posebno važan u random forestu i logističkoj regresiji, dok je njegov doprinos u GBM-u i podešenom stablu manji.
+
+Negativan porast AIC-a kod promenljivih Gender i Flight_Distance u logističkoj regresiji znači da njihovo izbacivanje nije pogoršalo AIC u konačnom modelu. Važnost promenljivih predstavlja prediktivni ili modelni doprinos, a ne dokazuje uzročno-posledični uticaj.
+
 
 # Poređenje modela
 
@@ -3786,6 +4058,8 @@ ggplot(model_results, aes(x = reorder(Model, AUC), y = AUC, fill = Model)) +
   )
 ```
 
-Iz priloženog grafikon poređenja modela prema AUC metrici na test skupu jasno se vidi da najvišu diskriminacionu moć ostvaruju ansambl metode i napredne varijante logističke regresije. 
+Iz priloženog grafikona jasno se vidi da najbolje rezultate ostvaruju modeli sa pojedinačnim ocenama usluga. Najviši AUC ima podešeni gradient boosting model (0,995), zatim podešeni random forest (0,994), osnovni random forest (0,994) i podešeno stablo (0,989).
 
-**Gradient boosting (osnovni)** i **podešeni random forest** nalaze se na samom vrhu sa AUC vrednostima koje premašuju 0,97, što potvrđuje da kombinovanje stabala uspešno hvata složene nelinearne interakcije u podacima. S druge strane, **logistička regresija sa pojedinačnim i zbirnim ocenama** ostvaruje izuzetno konkurentne rezultate (blizu 0,96), dok modeli bez ocena usluga ili osnovno stablo odlučivanja beleže nešto niže performanse. Varijanta logističke regresije bez promenljive `Not_Rated_Count` pokazuje stabilnost, ali zadržava nešto slabiju diskriminaciju u odnosu na modele koji integrišu informaciju o broju neocenjenih stavki, čime se i grafički potvrđuje opravdanost uvođenja ove promenljive u analizu.
+Kod zbirnih ocena najbolji je podešeni gradient boosting sa AUC vrednošću 0,979, dok podešeni random forest ostvaruje AUC 0,976. Izbacivanje promenljive Not_Rated_Count smanjuje performanse modela sa zbirnim ocenama, naročito kod stabla i logističke regresije.
+
+Modeli bez ocena usluga imaju znatno slabije rezultate. Najbolji među njima je podešeni gradient boosting sa AUC vrednošću 0,870, dok osnovno stablo ostvaruje AUC 0,794. Rezultati potvrđuju da pojedinačne ocene usluga sadrže najviše prediktivne informacije, a da Not_Rated_Count dodatno doprinosi predviđanju kod zbirnih ocena.
