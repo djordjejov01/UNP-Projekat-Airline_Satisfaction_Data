@@ -4039,3 +4039,269 @@ Iz priloženog grafikona jasno se vidi da najbolje rezultate ostvaruju modeli sa
 Kod zbirnih ocena najbolji je podešeni gradient boosting sa AUC vrednošću 0,979, dok podešeni random forest ostvaruje AUC 0,976. Izbacivanje promenljive Not_Rated_Count smanjuje performanse modela sa zbirnim ocenama, naročito kod stabla i logističke regresije.
 
 Modeli bez ocena usluga imaju znatno slabije rezultate. Najbolji među njima je podešeni gradient boosting sa AUC vrednošću 0,870, dok osnovno stablo ostvaruje AUC 0,794. Rezultati potvrđuju da pojedinačne ocene usluga sadrže najviše prediktivne informacije, a da Not_Rated_Count dodatno doprinosi predviđanju kod zbirnih ocena.
+
+# Model za produkciju
+
+U ovom poglavlju izabrani model pretvaramo u alat koji se može koristiti na novim putnicima. Najbolje rezultate imao je podešeni gradient boosting sa pojedinačnim ocenama usluga (AUC 0,995), pa ga koristimo kao produkcioni model. Postupak ima tri dela: funkcija koja iz sirovih podataka jednog putnika pravi iste promenljive na kojima je model treniran, finalni model sačuvan u fajlu i funkcija koja za novog putnika vraća verovatnoću zadovoljstva.
+
+## Priprema podataka za novog putnika
+
+Funkcija `prepare_passenger()` prima podatke u istom obliku kao originalni skup (imena kolona sa donjim crtama, ocene od 0 do 5, kašnjenje u minutima) i obavlja iste korake kao čišćenje podataka i feature engineering: postavlja nivoe kategorijskih promenljivih, računa razliku kašnjenja (`Delay_Difference`) i broj neocenjenih usluga (`Not_Rated_Count`). Ako kašnjenje pri dolasku nije uneto, koristi se kašnjenje pri polasku, isto kao kod nedostajućih vrednosti u analizi.
+
+```{r}
+rating_cols <- c("Inflight_wifi_service", "Departure_Arrival_time_convenient",
+                 "Ease_of_Online_booking", "Gate_location", "Food_and_drink",
+                 "Online_boarding", "Seat_comfort", "Inflight_entertainment",
+                 "On_board_service", "Leg_room_service", "Baggage_handling",
+                 "Checkin_service", "Cleanliness")
+
+raw_cols <- c("Gender", "Customer_Type", "Age", "Type_of_Travel", "Class",
+              "Flight_Distance", rating_cols, "Departure_Delay_in_Minutes")
+
+prepare_passenger <- function(x) {
+  x <- as.data.frame(x)
+
+  fali <- setdiff(raw_cols, names(x))
+  if (length(fali) > 0) stop("Nedostaju kolone: ", paste(fali, collapse = ", "))
+
+  # Ocene moraju biti 0-5 (0 = usluga nije ocenjena)
+  if (any(!as.matrix(x[, rating_cols]) %in% 0:5))
+    stop("Ocene usluga moraju biti celi brojevi od 0 do 5.")
+
+  # Kašnjenje pri dolasku je opcionalno; ako fali, zamenjuje se
+  # kašnjenjem pri polasku
+  if (!"Arrival_Delay_in_Minutes" %in% names(x)) x$Arrival_Delay_in_Minutes <- NA_real_
+  arrival <- ifelse(is.na(x$Arrival_Delay_in_Minutes),
+                    x$Departure_Delay_in_Minutes,
+                    x$Arrival_Delay_in_Minutes)
+
+  out <- data.frame(
+    Gender         = factor(x$Gender, levels = c("Female", "Male")),
+    Customer_Type  = factor(x$Customer_Type, levels = c("Disloyal Customer", "Loyal Customer")),
+    Type_of_Travel = factor(x$Type_of_Travel, levels = c("Business Travel", "Personal Travel")),
+    Class          = factor(x$Class, levels = c("Eco", "Business", "Eco Plus")),
+    Age                        = as.integer(x$Age),
+    Flight_Distance            = as.integer(x$Flight_Distance),
+    Departure_Delay_in_Minutes = as.integer(x$Departure_Delay_in_Minutes),
+    Delay_Difference           = arrival - x$Departure_Delay_in_Minutes
+  )
+
+  # Ocene i broj neocenjenih usluga
+  for (kol in rating_cols) out[[kol]] <- as.integer(x[[kol]])
+  out$Not_Rated_Count <- as.numeric(rowSums(x[, rating_cols] == 0))
+
+  # Upozorenje za putnike sa neocenjenim uslugama
+  if (any(out$Not_Rated_Count > 0))
+    warning("Neki putnici imaju neocenjene usluge (ocena 0). Model je veoma osetljiv na takve slučajeve, pa rezultat tumačiti oprezno.")
+
+  # Nepoznata kategorija postala bi NA, pa ne dozvoljavamo da prođe nezapaženo
+  if (anyNA(out[, c("Gender", "Customer_Type", "Type_of_Travel", "Class")]))
+    stop("Nepoznata vrednost u Gender / Customer_Type / Type_of_Travel / Class.")
+
+  out
+}
+```
+
+Funkciju proveravamo tako što iz prvih 2000 redova trening skupa rekonstruišemo sirove podatke, propustimo ih kroz funkciju i uporedimo sa originalnim promenljivama.
+
+```{r}
+ulaz <- as.data.frame(train_data[1:2000, ])
+ulaz$Arrival_Delay_in_Minutes <- ulaz$Departure_Delay_in_Minutes + ulaz$Delay_Difference
+ulaz <- ulaz[, c(raw_cols, "Arrival_Delay_in_Minutes")]   # samo sirove kolone
+
+izlaz <- suppressWarnings(prepare_passenger(ulaz))
+
+ocekivano <- as.data.frame(train_data[1:2000, names(izlaz)])
+all.equal(izlaz, ocekivano)
+```
+
+Provera na 2000 redova iz trening skupa pokazuje da se rekonstruisani podaci potpuno poklapaju sa originalnim, pa se novi putnici pripremaju na isti način kao podaci na kojima je model treniran.
+
+## Finalni model
+
+Za produkciju koristimo gradient boosting sa pojedinačnim ocenama usluga i parametrima izabranim unakrsnom validacijom (3000 stabala, dubina 6, shrinkage 0,05). Model se trenira na trening skupu i čuva u fajlu, pa se u daljem radu učitava bez ponovnog treniranja.
+
+```{r}
+set.seed(123)
+dir.create("../model", showWarnings = FALSE)
+putanja_modela <- "../model/gbm_produkcija.rds"
+
+prod_train <- as.data.frame(gbm_datasets[["pojedinačne ocene"]]$train)
+prod_test  <- as.data.frame(gbm_datasets[["pojedinačne ocene"]]$test)
+
+# Ako je model već sačuvan, učitava se; inače se trenira (traje nekoliko minuta) i čuva
+if (file.exists(putanja_modela)) {
+  prod_model <- readRDS(putanja_modela)
+} else {
+  prod_model <- gbm(
+    Satisfied_Num ~ .,
+    distribution      = "bernoulli",
+    data              = prod_train,
+    n.trees           = 3000,
+    interaction.depth = 6,
+    shrinkage         = 0.05,
+    bag.fraction      = 0.8,
+    train.fraction    = 1,
+    keep.data         = FALSE,
+    verbose           = FALSE
+  )
+  saveRDS(prod_model, putanja_modela)
+}
+
+# Provera na test skupu
+prob <- predict(prod_model, newdata = prod_test, n.trees = 3000, type = "response")
+y    <- prod_test$Satisfied_Num
+
+tacnost <- mean((prob > 0.5) == (y == 1))
+
+r  <- rank(prob)
+n1 <- sum(y == 1)
+n0 <- sum(y == 0)
+auc <- (sum(r[y == 1]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+
+round(c(Accuracy = tacnost, AUC = auc), 4)
+```
+
+Na test skupu finalni model postiže tačnost 0,962 i AUC 0,995, što se poklapa sa rezultatom iz poglavlja Poređenje modela. Model je treniran samo na trening skupu, jer bi dodavanje test podataka onemogućilo proveru ovakvih rezultata.
+
+Treba imati u vidu da su ocene usluga i zadovoljstvo prikupljeni u istoj anketi. Zato model procenjuje zadovoljstvo putnika na osnovu već popunjene ankete, a ne predviđa ga unapred.
+
+## Predviđanje za nove putnike
+
+Funkcija `predict_satisfaction()` prima sirove podatke putnika, priprema ih funkcijom `prepare_passenger()` i vraća verovatnoću zadovoljstva i klasu (prag je 0,5). Ispod je primer sa tri izmišljena putnika i provera da funkcija prijavljuje pogrešan unos.
+
+```{r}
+predict_satisfaction <- function(x, model = NULL, prag = 0.5) {
+  if (is.null(model)) model <- readRDS("../model/gbm_produkcija.rds")
+
+  podaci <- prepare_passenger(x)
+  prob   <- predict(model, newdata = podaci, n.trees = model$n.trees, type = "response")
+
+  data.frame(
+    Verovatnoca_zadovoljstva = round(prob, 3),
+    Predikcija = factor(ifelse(prob > prag, "Satisfied", "Not Satisfied"),
+                        levels = c("Satisfied", "Not Satisfied"))
+  )
+}
+
+novi_putnici <- data.frame(
+  Gender                            = c("Female", "Male", "Male"),
+  Customer_Type                     = c("Loyal Customer", "Disloyal Customer", "Loyal Customer"),
+  Age                               = c(45, 22, 60),
+  Type_of_Travel                    = c("Business Travel", "Personal Travel", "Business Travel"),
+  Class                             = c("Business", "Eco", "Eco Plus"),
+  Flight_Distance                   = c(1800, 400, 900),
+  Inflight_wifi_service             = c(4, 2, 0),
+  Departure_Arrival_time_convenient = c(4, 3, 3),
+  Ease_of_Online_booking            = c(4, 2, 0),
+  Gate_location                     = c(3, 3, 3),
+  Food_and_drink                    = c(5, 2, 3),
+  Online_boarding                   = c(5, 1, 3),
+  Seat_comfort                      = c(5, 2, 3),
+  Inflight_entertainment            = c(5, 2, 3),
+  On_board_service                  = c(5, 2, 3),
+  Leg_room_service                  = c(4, 2, 3),
+  Baggage_handling                  = c(5, 3, 3),
+  Checkin_service                   = c(4, 2, 3),
+  Cleanliness                       = c(5, 2, 3),
+  Departure_Delay_in_Minutes        = c(0, 60, 10)
+)
+
+cbind(novi_putnici[, c("Customer_Type", "Type_of_Travel", "Class")],
+      predict_satisfaction(novi_putnici, model = prod_model))
+
+# Provera da funkcija prijavljuje pogrešan unos
+neispravan <- novi_putnici[1, ]
+neispravan$Class <- "Premium"
+try(predict_satisfaction(neispravan, model = prod_model))
+```
+
+Na tri izmišljena putnika model daje očekivane predikcije. Putnik na poslovnom putovanju sa visokim ocenama dobija verovatnoću zadovoljstva 0,997, a putnik na ličnom putovanju sa niskim ocenama i kašnjenjem od sat vremena oko 0. Funkcija takođe prijavljuje grešku kada se unese nepoznata vrednost kategorijske promenljive, na primer nepostojeća klasa putovanja.
+
+Treći putnik ima dve neocenjene usluge. Da bismo videli koliko to utiče na predviđanje, upoređujemo istog putnika sa nulama i sa nulama zamenjenim neutralnom ocenom 3.
+
+```{r}
+p3 <- novi_putnici[3, ]
+p3_ocenjen <- p3
+p3_ocenjen[, rating_cols][p3_ocenjen[, rating_cols] == 0] <- 3
+
+rbind(
+  "sa dve neocenjene usluge" = suppressWarnings(predict_satisfaction(p3, model = prod_model)),
+  "sve usluge ocenjene (3)"  = predict_satisfaction(p3_ocenjen, model = prod_model)
+)
+```
+
+Provera na trećem putniku pokazuje da na predviđanje presudno utiče broj neocenjenih usluga. Isti putnik sa dve neocenjene usluge (ocena 0) dobija verovatnoću zadovoljstva oko 1, a kada se nule zamene neutralnom ocenom 3, verovatnoća pada na oko 0,05. Model je ovaj obrazac naučio iz podataka, gde je nedostatak ocene povezan sa zadovoljstvom, ali to ne znači da neocenjena usluga uzrokuje zadovoljstvo. U praksi nulu treba unositi samo kada putnik stvarno nije ocenio uslugu, a predikcije za takve putnike treba tumačiti oprezno.
+
+## Procena pre ankete: model bez ocena usluga
+
+Pored glavnog modela, pripremamo i model koji ne koristi ocene usluga, nego samo podatke o putniku i letu (pol, tip korisnika, svrha putovanja, klasa, starost, dužina leta i kašnjenje). Ovakav model može da se koristi i pre nego što putnik popuni anketu, ali je znatno slabiji, pa njegove procene treba tumačiti kao grubu orijentaciju. Trenira se na isti način i sa istim parametrima kao glavni model.
+
+```{r}
+set.seed(123)
+putanja_modela_bez <- "../model/gbm_produkcija_bez_ocena.rds"
+
+bez_train <- as.data.frame(gbm_datasets[["bez ocena usluga"]]$train)
+bez_test  <- as.data.frame(gbm_datasets[["bez ocena usluga"]]$test)
+
+if (file.exists(putanja_modela_bez)) {
+  prod_model_bez <- readRDS(putanja_modela_bez)
+} else {
+  prod_model_bez <- gbm(
+    Satisfied_Num ~ .,
+    distribution      = "bernoulli",
+    data              = bez_train,
+    n.trees           = 3000,
+    interaction.depth = 6,
+    shrinkage         = 0.05,
+    bag.fraction      = 0.8,
+    train.fraction    = 1,
+    keep.data         = FALSE,
+    verbose           = FALSE
+  )
+  saveRDS(prod_model_bez, putanja_modela_bez)
+}
+
+# Provera na test skupu
+prob_bez <- predict(prod_model_bez, newdata = bez_test, n.trees = 3000, type = "response")
+y_bez    <- bez_test$Satisfied_Num
+
+tacnost_bez <- mean((prob_bez > 0.5) == (y_bez == 1))
+
+r_bez  <- rank(prob_bez)
+n1_bez <- sum(y_bez == 1)
+n0_bez <- sum(y_bez == 0)
+auc_bez <- (sum(r_bez[y_bez == 1]) - n1_bez * (n1_bez + 1) / 2) / (n1_bez * n0_bez)
+
+round(c(Accuracy = tacnost_bez, AUC = auc_bez), 4)
+```
+Model bez ocena usluga postiže tačnost 0,804 i AUC 0,870, što se poklapa sa rezultatom iz poglavlja Poređenje modela. Ovo je znatno slabije nego kod modela sa pojedinačnim ocenama (tačnost 0,962), što je očekivano, jer su ocene usluga najinformativniji deo podataka. Zato ovaj model treba koristiti kao grubu procenu pre ankete, a ne kao zamenu za glavni model.
+Za ovaj model ocene nisu potrebne, pa funkcija za predviđanje ocene ne traži. Ako ih korisnik ipak unese, ignorišu se.
+
+```{r}
+predict_satisfaction_bez_ocena <- function(x, model = NULL, prag = 0.5) {
+  if (is.null(model)) model <- readRDS("../model/gbm_produkcija_bez_ocena.rds")
+
+  x <- as.data.frame(x)
+  # prepare_passenger() traži ocene; za ovaj model se ne koriste, pa ih popunjavamo
+  # neutralnom vrednošću, a zatim zadržavamo samo promenljive koje model koristi
+  for (kol in rating_cols) if (!kol %in% names(x)) x[[kol]] <- 3
+  podaci <- suppressWarnings(prepare_passenger(x))[, model$var.names]
+
+  prob <- predict(model, newdata = podaci, n.trees = model$n.trees, type = "response")
+
+  data.frame(
+    Verovatnoca_zadovoljstva = round(prob, 3),
+    Predikcija = factor(ifelse(prob > prag, "Satisfied", "Not Satisfied"),
+                        levels = c("Satisfied", "Not Satisfied"))
+  )
+}
+
+# Isti putnici kao ranije, ali bez ocena usluga
+putnici_bez_ocena <- novi_putnici[, c("Gender", "Customer_Type", "Age", "Type_of_Travel",
+                                      "Class", "Flight_Distance", "Departure_Delay_in_Minutes")]
+
+cbind(putnici_bez_ocena[, c("Customer_Type", "Type_of_Travel", "Class")],
+      predict_satisfaction_bez_ocena(putnici_bez_ocena, model = prod_model_bez))
+```
+Za iste tri izmišljene putnike model bez ocena daje manje izražene verovatnoće nego glavni model. Putnik na poslovnom putovanju u biznis klasi dobija 0,882, a putnik na ličnom putovanju u ekonomskoj klasi 0,083. Putnik sa poslovnim putovanjem u Eco Plus klasi dobija 0,348 i klasifikuje se kao nezadovoljan, iako ga je glavni model, na osnovu ocena, svrstao u zadovoljne. To pokazuje da podaci o putniku i letu sami po sebi ne određuju zadovoljstvo i da se rezultat ovog modela mora tumačiti oprezno.
