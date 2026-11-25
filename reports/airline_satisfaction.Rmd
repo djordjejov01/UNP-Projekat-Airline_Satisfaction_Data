@@ -1,12 +1,12 @@
 ---
 title: "Airline satisfaction data"
 output:
+  word_document:
+    reference_docx: template.docx
   html_document:
     toc: true
     toc_float: true
     theme: cosmo
-  word_document:
-    reference_docx: template.docx
   pdf_document: default
 ---
 
@@ -2296,7 +2296,7 @@ x_matrix <- model.matrix(full_model)[, -1]   # matrica prediktora bez konstantno
 vif_values <- diag(solve(cor(x_matrix)))
 round(sort(vif_values, decreasing = TRUE), 2)
 ```
-Rezultati pokazuju da je multikolinearnost prisutna samo kod dve promenljive: kašnjenje pri dolasku (VIF = 14,82) i kašnjenje pri polasku (VIF = 14,82) imaju vrednosti veće od 10, što potvrđuje da nose gotovo istu informaciju, u skladu sa ranije utvrđenom korelacijom od 0,959. Sve ostale promenljive imaju VIF ispod 2,1, pa među njima ne postoji problem multikolinearnosti. Četiri nove zbirne ocene imaju vrednosti od 1,05 do 1,32, što znači da su međusobno dovoljno nezavisne da se koriste zajedno u modelu. Nešto više vrednosti kod `ClassEco` (2,07) i `Type_of_TravelPersonal Travel` (1,85) u skladu su sa povezanošću klase i svrhe putovanja utvrđenom u prethodnom delu analize, ali su daleko ispod granice od 5.
+Rezultati pokazuju da je multikolinearnost prisutna samo kod dve promenljive: kašnjenje pri dolasku (VIF = 14,82) i kašnjenje pri polasku (VIF = 14,82) imaju vrednosti veće od 10, što potvrđuje da nose gotovo istu informaciju, u skladu sa ranije utvrđenom korelacijom od 0,966. Sve ostale promenljive imaju VIF ispod 2,1, pa među njima ne postoji problem multikolinearnosti. Četiri nove zbirne ocene imaju vrednosti od 1,05 do 1,32, što znači da su međusobno dovoljno nezavisne da se koriste zajedno u modelu. Nešto više vrednosti kod `ClassEco` (2,07) i `Type_of_TravelPersonal Travel` (1,85) u skladu su sa povezanošću klase i svrhe putovanja utvrđenom u prethodnom delu analize, ali su daleko ispod granice od 5.
 
 ### Rešavanje multikolinearnosti kašnjenja
 
