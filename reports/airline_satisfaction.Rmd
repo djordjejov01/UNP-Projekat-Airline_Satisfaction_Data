@@ -1,12 +1,12 @@
 ---
 title: "Airline satisfaction data"
 output:
+  word_document:
+    reference_docx: template.docx
   html_document:
     toc: true
     toc_float: true
     theme: cosmo
-  word_document:
-    reference_docx: template.docx
   pdf_document: default
 ---
 
@@ -118,31 +118,31 @@ Spisak kolona koje skup sadrži i kratak opis:
 
 6. **Flight.Distance** – Distanca leta u miljama.
 
-7. **Inflight.wifi.service** – Ocena (0–5) zadovoljstva WiFi internet uslugom tokom leta. Vrednost 0 označava da usluga nije ocenjena.
+7. **Inflight.wifi.service** – Ocena (1–5) zadovoljstva WiFi internet uslugom tokom leta. Vrednost 0 označava da usluga nije ocenjena.
 
-8. **Departure.Arrival.time.convenient** – Ocena (0–5) zadovoljstva pogodnošću vremena polaska i dolaska.
+8. **Departure.Arrival.time.convenient** – Ocena (1–5) zadovoljstva pogodnošću vremena polaska i dolaska. Vrednost 0 označava da usluga nije ocenjena.
 
-9. **Ease.of.Online.booking** – Ocena (0–5) zadovoljstva procesom online rezervacije leta.
+9. **Ease.of.Online.booking** – Ocena (1–5) zadovoljstva procesom online rezervacije leta. Vrednost 0 označava da usluga nije ocenjena.
 
-10. **Gate.location** – Ocena (0–5) zadovoljstva lokacijom gejta za ukrcavanje.
+10. **Gate.location** – Ocena (1–5) zadovoljstva lokacijom gejta za ukrcavanje. Vrednost 0 označava da usluga nije ocenjena.
 
-11. **Food.and.drink** – Ocena (0–5) zadovoljstva hranom i pićem tokom leta.
+11. **Food.and.drink** – Ocena (1–5) zadovoljstva hranom i pićem tokom leta. Vrednost 0 označava da usluga nije ocenjena.
 
-12. **Online.boarding** – Ocena (0–5) zadovoljstva procesom online ukrcavanja.
+12. **Online.boarding** – Ocena (1–5) zadovoljstva procesom online ukrcavanja. Vrednost 0 označava da usluga nije ocenjena.
 
-13. **Seat.comfort** – Ocena (0–5) udobnosti sedišta.
+13. **Seat.comfort** – Ocena (1–5) udobnosti sedišta. Vrednost 0 označava da usluga nije ocenjena.
 
-14. **Inflight.entertainment** – Ocena (0–5) zadovoljstva sadržajem za zabavu tokom leta.
+14. **Inflight.entertainment** – Ocena (1–5) zadovoljstva sadržajem za zabavu tokom leta. Vrednost 0 označava da usluga nije ocenjena.
 
-15. **On.board.service** – Ocena (0–5) zadovoljstva uslugom osoblja u avionu.
+15. **On.board.service** – Ocena (1–5) zadovoljstva uslugom osoblja u avionu. Vrednost 0 označava da usluga nije ocenjena.
 
-16. **Leg.room.service** – Ocena (0–5) zadovoljstva prostorom za noge.
+16. **Leg.room.service** – Ocena (1–5) zadovoljstva prostorom za noge. Vrednost 0 označava da usluga nije ocenjena.
 
-17. **Baggage.handling** – Ocena (0–5) zadovoljstva rukovanjem prtljagom.
+17. **Baggage.handling** – Ocena (1–5) zadovoljstva rukovanjem prtljagom. Vrednost 0 označava da usluga nije ocenjena.
 
-18. **Checkin.service** – Ocena (0–5) zadovoljstva uslugom prijave na let.
+18. **Checkin.service** – Ocena (1–5) zadovoljstva uslugom prijave na let. Vrednost 0 označava da usluga nije ocenjena.
 
-19. **Cleanliness** – Ocena (0–5) zadovoljstva čistoćom kabine.
+19. **Cleanliness** – Ocena (1–5) zadovoljstva čistoćom kabine. Vrednost 0 označava da usluga nije ocenjena.
 
 20. **Departure.Delay.in.Minutes** – Kašnjenje na polasku izraženo u minutima.
 
@@ -243,7 +243,7 @@ Kroz pregled podataka ustanovili smo:
 - **Ciljna promenljiva `Satisfaction`** je binarna, sa blagom neuravnoteženošću: 43.4% Satisfied i 56.6% Not Satisfied.
 - **`Arrival_Delay_in_Minutes`** sadrži 393 nedostajuće vrednosti, što ćemo rešiti u sekciji Priprema podataka.
 - Sve kategorijske promenljive su konvertovane u faktore.
-- Ocene usluga su ordinalne promenljive (0–5), gde 0 označava da usluga nije ocenjena.
+- Ocene usluga su ordinalne promenljive (1–5), gde 0 označava da usluga nije ocenjena.
 
 U narednoj sekciji prelazimo na **eksplorativnu analizu podataka (EDA)**, gde ćemo detaljnije ispitati distribucije i odnose među promenljivama.
 
@@ -253,7 +253,7 @@ U narednoj sekciji prelazimo na **eksplorativnu analizu podataka (EDA)**, gde ć
 
 Eksplorativna analiza podataka (Exploratory Data Analysis – EDA) predstavlja važan korak u procesu analize, jer omogućava bolje razumevanje strukture, kvaliteta i osnovnih karakteristika podataka pre izgradnje prediktivnih modela.
 
-U okviru ove analize ispitaćemo distribucije pojedinačnih promenljivih, učestalost kategorija, raspodelu ciljne promenljive Satisfaction, kao i odnose između karakteristika putnika, kvaliteta usluga i konačnog zadovoljstva. Posebna pažnja biće posvećena numeričkim promenljivama, kao što su starost putnika, dužina leta i vremena kašnjenja, ali i ocenama različitih usluga, koje imaju vrednosti od 0 do 5. Kategorijske promenljive, poput klase putovanja, tipa putovanja i tipa korisnika, biće analizirane kroz njihove frekvencije i u odnosu na zadovoljstvo putnika.
+U okviru ove analize ispitaćemo distribucije pojedinačnih promenljivih, učestalost kategorija, raspodelu ciljne promenljive Satisfaction, kao i odnose između karakteristika putnika, kvaliteta usluga i konačnog zadovoljstva. Posebna pažnja biće posvećena numeričkim promenljivama, kao što su starost putnika, dužina leta i vremena kašnjenja, ali i ocenama različitih usluga, koje imaju vrednosti od 1 do 5, dok 0 označava da usluga nije ocenjena. Kategorijske promenljive, poput klase putovanja, tipa putovanja i tipa korisnika, biće analizirane kroz njihove frekvencije i u odnosu na zadovoljstvo putnika.
 
 EDA će obuhvatiti **univarijantnu analizu**, kojom se svaka promenljiva posmatra pojedinačno, kao i **bivarijantnu analizu**, kojom se ispituje povezanost između pojedinačnih karakteristika i ciljne promenljive **Satisfaction**. Na ovaj način mogu se uočiti najvažniji obrasci, razlike između zadovoljnih i nezadovoljnih putnika, eventualna neuravnoteženost klasa, nedostajuće vrednosti i moguće anomalije u podacima.
 
@@ -299,7 +299,7 @@ Proverom numeričkih promenljivih Age, Flight_Distance, Departure_Delay_in_Minut
 
 Na osnovu ovih provera, u navedenim promenljivama nisu uočene anomalije ovog tipa. Ipak, ovo ne isključuje mogućnost postojanja drugih anomalija ili neuobičajenih vrednosti koje zahtevaju dodatnu analizu.
 
-Pre nego što pređemo na dalju analizu, potrebno je da se osvrnemo na ocene usluga (kolone poput `Inflight_wifi_service`, `Food_and_drink`, itd.). Prema zvaničnoj dokumentaciji skupa podataka, ocene se kreću u opsegu od 0 do 5, pri čemu **vrednost 0 označava da usluga nije ocenjena** (npr. putnik nije koristio WiFi, nije konzumirao hranu, ili let nije imao tu uslugu).
+Pre nego što pređemo na dalju analizu, potrebno je da se osvrnemo na ocene usluga (kolone poput `Inflight_wifi_service`, `Food_and_drink`, itd.). Prema zvaničnoj dokumentaciji skupa podataka, ocene se kreću u opsegu od 1 do 5, pri čemu **vrednost 0 označava da usluga nije ocenjena** (npr. putnik nije koristio WiFi, nije konzumirao hranu, ili let nije imao tu uslugu).
 
 ```{r}
 rating_columns <- c(
@@ -996,7 +996,7 @@ Vizuelni prikaz boxplot dijagrama za kašnjenje pri dolasku pokazuje istovetan t
 
 ## Bivarijantna analiza ocena usluga (Service Ratings vs. Satisfaction)
 
-U ovom segmentu analiziramo uticaj pojedinačnih ocena usluga (merenih na skali od 0 do 5) na krajnje zadovoljstvo putnika. Kako bismo identifikovali koje usluge imaju najjaču korelaciju sa zadovoljstvom i izbegli deskriptivno preopterećenje izveštaja, najpre vršimo zbirni pregled prosečnih ocena za sve dostupne kategorije usluga.
+U ovom segmentu analiziramo uticaj pojedinačnih ocena usluga (na skali od 1 do 5,  pri čemu 0 označava neocenjenu uslugu) na krajnje zadovoljstvo putnika. Kako bismo identifikovali koje usluge imaju najjaču korelaciju sa zadovoljstvom i izbegli deskriptivno preopterećenje izveštaja, najpre vršimo zbirni pregled prosečnih ocena za sve dostupne kategorije usluga.
 
 ### 1. Zbirni pregled svih ocena usluga
 
@@ -1042,7 +1042,7 @@ p_boarding <- ggplot(data, aes(x = Satisfaction, y = Online_boarding, fill = Sat
   labs(
     title = "Ocena online čekiranja prema zadovoljstvu",
     x = "Status zadovoljstva",
-    y = "Ocena online čekiranja (0-5)",
+    y = "Ocena online čekiranja (0 = nije ocenjena; 1–5)",
     fill = "Status"
   ) +
   theme(legend.position = "none")
@@ -1071,7 +1071,7 @@ p_ent <- ggplot(data, aes(x = Satisfaction, y = Inflight_entertainment, fill = S
   labs(
     title = "Ocena zabave na letu prema zadovoljstvu",
     x = "Status zadovoljstva",
-    y = "Ocena zabave na letu (0-5)",
+    y = "Ocena zabave na letu (0 = nije ocenjena; 1–5)",
     fill = "Status"
   ) +
   theme(legend.position = "none")
@@ -1100,7 +1100,7 @@ p_seat <- ggplot(data, aes(x = Satisfaction, y = Seat_comfort, fill = Satisfacti
   labs(
     title = "Ocena udobnosti sedišta prema zadovoljstvu",
     x = "Status zadovoljstva",
-    y = "Ocena udobnosti sedišta (0-5)",
+    y = "Ocena udobnosti sedišta (0 = nije ocenjena; 1–5)",
     fill = "Status"
   ) +
   theme(legend.position = "none")
@@ -1129,7 +1129,7 @@ p_wifi <- ggplot(data, aes(x = Satisfaction, y = Inflight_wifi_service, fill = S
   labs(
     title = "Ocena Wi-Fi usluge prema zadovoljstvu",
     x = "Status zadovoljstva",
-    y = "Ocena Wi-Fi usluge (0-5)",
+    y = "Ocena Wi-Fi usluge (0 = nije ocenjena; 1–5)",
     fill = "Status"
   ) +
   theme(legend.position = "none")
@@ -1290,7 +1290,7 @@ arrival_delay_summary <- data %>%
 
 arrival_delay_summary
 ```
-Na osnovu dobijenih rezultata, može se uočiti da 56,32% letova nije imalo kašnjenje pri dolasku. Malo kašnjenje zabeleženo je kod 20,92% letova, dok je umereno kašnjenje prisutno kod 15,76% letova. Veliko kašnjenje zabeleženo je kod 7,00% letova.
+Na osnovu dobijenih rezultata, može se uočiti da 56,13% letova nije imalo kašnjenje pri dolasku. Malo kašnjenje zabeleženo je kod 20,98% letova, dok je umereno kašnjenje prisutno kod 15,82% letova. Veliko kašnjenje zabeleženo je kod 7,06% letova.
 
 Rezultati pokazuju da više od polovine letova stiže bez kašnjenja, dok su velika kašnjenja zastupljena u manjem procentu. U poređenju sa kašnjenjem pri polasku, udeo letova sa velikim kašnjenjem nešto je veći pri dolasku (7,00% u odnosu na 6,91%). Kategorizacija omogućava pregledniju analizu i jednostavnije poređenje kašnjenja pri polasku i dolasku.
 
@@ -1365,9 +1365,9 @@ cor(
   data$Arrival_Delay_in_Minutes
 )
 ```
-Rezultat Pearsonovog hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između kategorija kašnjenja pri polasku i dolasku, χ²(9) = 162873, p < 0,001. Na osnovu ovog rezultata odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
+Rezultat Pearsonovog hi-kvadrat testa pokazuje da postoji statistički značajna povezanost između kategorija kašnjenja pri polasku i dolasku, χ²(9) = 164940, p < 0,001. Na osnovu ovog rezultata odbacujemo nultu hipotezu o nezavisnosti ove dve promenljive.
 
-Cramerov koeficijent V iznosi 0,647, što ukazuje na jaku povezanost kategorija. Pearsonov koeficijent korelacije između numeričkih vrednosti kašnjenja iznosi 0,959, što predstavlja gotovo potpunu linearnu povezanost. Korelacija je viša od Cramerovog V jer kategorizacija odbacuje deo informacije: letovi koji se nalaze blizu granice dve kategorije (npr. 14 i 16 minuta) svrstavaju se u različite kategorije iako se gotovo ne razlikuju.
+Cramerov koeficijent V iznosi 0,651, što ukazuje na jaku povezanost kategorija. Pearsonov koeficijent korelacije između numeričkih vrednosti kašnjenja iznosi 0,966, što predstavlja gotovo potpunu linearnu povezanost. Korelacija je viša od Cramerovog V jer kategorizacija odbacuje deo informacije: letovi koji se nalaze blizu granice dve kategorije (npr. 14 i 16 minuta) svrstavaju se u različite kategorije iako se gotovo ne razlikuju.
 
 Ovako visoka povezanost znači da kašnjenje pri polasku i kašnjenje pri dolasku nose gotovo istu informaciju, što ukazuje na problem multikolinearnosti. Zbog toga ih nećemo istovremeno koristiti kao nezavisne promenljive u istom modelu bez provere. Konačna odluka o tome koju promenljivu zadržati biće doneta u multivarijantnoj analizi i fazi modelovanja.
 
@@ -1396,9 +1396,9 @@ ggplot(data, aes(x = Delay_Difference)) +
   )
 ```
 
-Promenljiva `Delay_Difference` ima medijanu 0 i interkvartilni raspon od -2 do 0 minuta, što znači da se kod većine letova kašnjenje pri dolasku gotovo ne razlikuje od kašnjenja pri polasku. Histogram potvrđuje ovaj nalaz: raspodela je gotovo simetrična oko nule, sa izrazito visokim vrhom u kome se nalazi više od 60.000 letova, dok se broj letova naglo smanjuje u obe strane. Prosečna razlika iznosi svega 0,33 minuta, pa letovi u proseku ne nadoknađuju niti značajno gube vreme tokom leta.
+Promenljiva `Delay_Difference` ima medijanu 0 i interkvartilni raspon od -2 do 0 minuta, što znači da se kod većine letova kašnjenje pri dolasku gotovo ne razlikuje od kašnjenja pri polasku. Histogram potvrđuje ovaj nalaz: raspodela je gotovo simetrična oko nule, sa izrazito visokim vrhom u kome se nalazi više od 60.000 letova, dok se broj letova naglo smanjuje u obe strane. Prosečna razlika iznosi svega 0,45 minuta, pa letovi u proseku ne nadoknađuju niti značajno gube vreme tokom leta.
 
-Raspon vrednosti, od -530 do 234 minuta, pokazuje da postoje retki letovi sa izuzetno velikom razlikom. Ove opservacije nećemo uklanjati, jer mogu predstavljati stvarne slučajeve (npr. let koji je znatno nadoknadio veliko kašnjenje pri polasku), a njihov uticaj biće razmotren u kasnijim fazama.
+Raspon vrednosti, od -54 do 234 minuta, pokazuje da postoje retki letovi sa izuzetno velikom razlikom. Ove opservacije nećemo uklanjati, jer mogu predstavljati stvarne slučajeve (npr. let koji je znatno nadoknadio veliko kašnjenje pri polasku), a njihov uticaj biće razmotren u kasnijim fazama.
 
 Iako je većina vrednosti koncentrisana oko nule, Delay_Difference nosi informaciju koju kašnjenje pri polasku samo ne sadrži. Njen značaj proverava se u odeljku o multikolinearnosti u multivarijantnoj analizi.
 
@@ -1515,7 +1515,7 @@ data %>%
   count(Not_Rated_Count) %>%
   mutate(Procenat = round(n / sum(n) * 100, 2))
 ```
-Velika većina putnika, njih 119.567 (92,06%), ocenila je svih 13 usluga. Jednu uslugu nije ocenilo 4.548 putnika (3,50%), dve usluge 2.457 putnika (1,89%), tri usluge 2.565 putnika (1,97%), a četiri usluge 743 putnika (0,57%). Nijedan putnik nije imao više od četiri neocenjene usluge. Ukupno je, dakle, 8,0% putnika imalo bar jednu neocenjenu uslugu. Grupa sa četiri neocenjene usluge je veoma mala, pa je procenat zadovoljnih unutar nje manje pouzdan nego kod ostalih grupa.
+Velika većina putnika, njih 119.567 (92,06%), ocenila je svih 13 usluga. Jednu uslugu nije ocenilo 4.548 putnika (3,50%), dve usluge 2.457 putnika (1,89%), tri usluge 2.565 putnika (1,97%), a četiri usluge 743 putnika (0,57%). Nijedan putnik nije imao više od četiri neocenjene usluge. Ukupno je, dakle, 7,9% putnika imalo bar jednu neocenjenu uslugu. Grupa sa četiri neocenjene usluge je veoma mala, pa je procenat zadovoljnih unutar nje manje pouzdan nego kod ostalih grupa.
 ```{r}
 ggplot(data, aes(x = factor(Not_Rated_Count), fill = Satisfaction)) +
   geom_bar(position = "fill") +
@@ -2842,6 +2842,8 @@ data.frame(
 )
 ```
 
+Konačni model je uspešno konvergirao. Model koji uključuje interakciju klase i svrhe putovanja ima 26 parametara, AIC 55.703,3 i McFaddenov pseudo R² 0,609. Kada se ta interakcija ukloni, model ima 24 parametra, a AIC raste na 55.717,3, dok zaokruženi pseudo R² ostaje 0,609. Niži AIC podržava zadržavanje interakcije: ona poboljšava prilagođavanje modela dovoljno da opravda dodatna dva parametra. Rezultati opisuju povezanost u podacima, a ne dokazuju uzročni uticaj.
+
 ## Varijante skupa promenljivih
 
 Konačna specifikacija primenjuje se na četiri varijante skupa promenljivih definisane ranije: sa zbirnim ocenama usluga, sa pojedinačnim ocenama, bez ocena usluga i sa zbirnim ocenama bez promenljive Not_Rated_Count. Zajednički deo svih varijanti čine karakteristike putnika i leta sa istim transformacijama: kvadrat starosti, logaritam kašnjenja pri polasku i interakcije klase i tipa korisnika sa svrhom putovanja. Kod varijante sa pojedinačnim ocenama interakcija sa svrhom putovanja dodaje se za svaku ocenu. Varijanta bez ocena usluga ne sadrži ni Not_Rated_Count, jer ta promenljiva potiče iz ocena usluga. Četvrta varijanta, sa zbirnim ocenama bez Not_Rated_Count, uvedena je da bi se proverilo koliko se model oslanja na ovu promenljivu.
@@ -2889,11 +2891,10 @@ varijante_tabela
 # Provera: varijanta sa zbirnim ocenama mora imati isti AIC kao konačni model
 round(c(AIC(lr_modeli[["zbirne ocene"]]), AIC(lr_final)), 1)
 ```
-### Zaključak poglavlja
 
-Analiza sprovedena kroz logističku regresiju pokazala je da odabrane ulazne promenljive vrlo dobro objašnjavaju zadovoljstvo putnika, što potvrđuju visoke vrednosti McFaddenovog pseudo $R^2$ pokazatelja. Kroz iterativno poboljšanje osnovnog modela utvrđeno je da relacije sa zadovoljstvom nisu u potpunosti linearne, zbog čega su uspešno uvedeni nelinearni članovi (poput kvadratnog člana starosti i logaritamske transformacije kašnjenja), kao i tretman broja neocenjenih usluga (`Not_Rated_Count`) kao faktora. 
+Sva četiri logistička modela su konvergirala. Varijanta sa pojedinačnim ocenama ima najniži AIC (46.323,3) i najveći McFaddenov pseudo R² (0,675), što ukazuje na najbolje prilagođavanje trening podacima među ispitanim varijantama. Varijanta sa zbirnim ocenama postiže pseudo R² od 0,609, a izbacivanje promenljive Not_Rated_Count prati slabije prilagođavanje (AIC 60.975,3; pseudo R² 0,572). Model bez ocena usluga ima najslabije prilagođavanje (AIC 99.104,1; pseudo R² 0,304), što pokazuje koliko ocene doprinose objašnjavanju zadovoljstva. Ove vrednosti opisuju prilagođavanje na trening skupu; prediktivne performanse varijanti porede se zasebno na test skupu u narednom odeljku.
 
-Posebno značajnim su se pokazale interakcije između svrhe putovanja i zbirnih ocena usluga, kao i interakcije sa tipom korisnika, što ukazuje na to da faktori zadovoljstva nemaju istu težinu za sve segmente putnika (npr. poslovne u odnosu na lične putnike). Testiranjem četiri različite varijante skupa obeležja kreirana je čvrsta osnova za nepristrasno poređenje performansi sa stablima odlučivanja, random forestom i gradient boosting modelom na test skupu.
+
 
 ## Evaluacija na test skupu
 
@@ -2916,10 +2917,15 @@ model_results <- bind_rows(model_results, lr_rezultati)
 lr_rezultati %>% mutate(across(where(is.numeric), ~ round(., 3)))
 ```
 
+Na test skupu najbolja je varijanta sa pojedinačnim ocenama: tačnost joj je 0,908, a AUC 0,969. Varijanta sa zbirnim ocenama postiže tačnost 0,889 i AUC 0,955, dok varijanta bez ocena usluga ima najniže rezultate (0,788 i 0,849). Zbirne ocene bez Not_Rated_Count postižu tačnost 0,880 i AUC 0,947. Sve varijante su bolje od slučajnog razvrstavanja prema AUC-u, ali rezultati pokazuju da su ocene usluga važne za predviđanje zadovoljstva.
+
 ```{r}
 # Matrica konfuzije za varijantu sa zbirnim ocenama
 evaluate_model(test_lr$Satisfaction, test_prob[["zbirne ocene"]])$confusion
 ```
+
+Za logističku regresiju sa zbirnim ocenama, matrica konfuzije pokazuje da je model tačno prepoznao 9.615 zadovoljnih i 13.480 nezadovoljnih putnika. Pogrešno je označio 1.671 zadovoljnog putnika kao nezadovoljnog i 1.211 nezadovoljnih kao zadovoljne. Ukupna tačnost ove varijante na test skupu je 0,889, što se poklapa sa vrednošću u tabeli evaluacije.
+
 ## Tumačenje konačnog modela
 
 Pošto konačni model sadrži interakcije sa svrhom putovanja, jedan odnos šansi ne važi za sve putnike. Zato šanse za zadovoljstvo prikazujemo posebno za poslovna i lična putovanja. Za lična putovanja koeficijent glavnog efekta sabira se sa koeficijentom interakcije, a interval poverenja od 95% računa se iz kovarijacione matrice koeficijenata. Efekat se odnosi na varijantu sa zbirnim ocenama, a za ocene je izražen po jednom poenu.
@@ -2959,6 +2965,9 @@ or_po_putovanju <- bind_rows(
 )
 or_po_putovanju
 ```
+
+Tabela pokazuje da su veze između karakteristika putnika i zadovoljstva različite za poslovna i lična putovanja. Kod poslovnih putnika, lojalni korisnici imaju 17,49 puta veće šanse za zadovoljstvo od dislojalnih, dok je kod ličnih putovanja procenjeni odnos šansi 0,59, uz interval poverenja koji se zaokružuje do 1,00, pa taj rezultat treba tumačiti oprezno. Efekti ocena takođe zavise od svrhe putovanja: povećanje Digital_Score za jedan poen povezano je sa 4,06 puta većim šansama za zadovoljstvo kod poslovnih putnika, ali sa 1,19 puta većim šansama kod putnika na ličnom putovanju. Kod Booking_Score odgovarajući odnosi su 1,39 i 12,35. Interval za poslovnu klasu u odnosu na Eco klasu kod poslovnih putovanja iznosi 1,54–1,74, dok kod ličnih putovanja interval 0,94–1,32 obuhvata 1, pa nema jasnog dokaza o razlici u tom segmentu. Ovo su prilagođene povezanosti iz modela, ne dokaz uzročnosti.
+
 ## Važnost promenljivih
 
 Važnost svake grupe promenljivih procenjujemo tako što je (zajedno sa svim njenim interakcijama) izbacimo iz konačnog modela i posmatramo porast AIC-a. Što je porast veći, to je grupa važnija za objašnjenje zadovoljstva. Svrha putovanja se izbacuje zajedno sa svim interakcijama u kojima učestvuje, pa njen porast obuhvata i činjenicu da se uticaj ocena usluga razlikuje između poslovnih i ličnih putovanja.
@@ -2994,8 +3003,13 @@ vaznost <- cache_rds("../data/results/lr_vaznost.rds", {
 vaznost
 ```
 
+Prema porastu AIC-a nakon izbacivanja grupe promenljivih, najveći doprinos prilagođavanju modela ima svrha putovanja (20.910), zatim Digital_Score (9.647), tip korisnika (7.816), Handling_Score (7.103) i broj neocenjenih usluga (5.272). To znači da se uklanjanjem tih promenljivih model najviše pogoršava, uz najveći doprinos svrhe putovanja koja obuhvata i njene interakcije sa drugim promenljivama. Za pol i dužinu leta vrednosti su −1 i −2; njihovo uklanjanje ne pogoršava model prema AIC-u, već ga blago poboljšava. Ove vrednosti mere doprinos modelu na trening skupu, a ne uzročni uticaj na zadovoljstvo.
 
+### Zaključak poglavlja
 
+Analiza sprovedena kroz logističku regresiju pokazala je da odabrane ulazne promenljive vrlo dobro objašnjavaju zadovoljstvo putnika, što potvrđuju visoke vrednosti McFaddenovog pseudo $R^2$ pokazatelja. Kroz iterativno poboljšanje osnovnog modela utvrđeno je da relacije sa zadovoljstvom nisu u potpunosti linearne, zbog čega su uspešno uvedeni nelinearni članovi (poput kvadratnog člana starosti i logaritamske transformacije kašnjenja), kao i tretman broja neocenjenih usluga (`Not_Rated_Count`) kao faktora. 
+
+Posebno značajnim su se pokazale interakcije između svrhe putovanja i zbirnih ocena usluga, kao i interakcije sa tipom korisnika, što ukazuje na to da faktori zadovoljstva nemaju istu težinu za sve segmente putnika (npr. poslovne u odnosu na lične putnike). Testiranjem četiri različite varijante skupa obeležja kreirana je čvrsta osnova za nepristrasno poređenje performansi sa stablima odlučivanja, random forestom i gradient boosting modelom na test skupu.
 
 # Drvo odlučivanja i random forest
 
@@ -3230,7 +3244,7 @@ tuned_tree
 
 ```{r}
 variant_labels <- c(
-  "pojedinacne ocene",
+  "pojedinačne ocene",
   "zbirne ocene",
   "bez ocena usluga",
   "zbirne ocene bez Not_Rated_Count"
@@ -3250,7 +3264,7 @@ tuned_tree_evaluations <- setNames(
       actual = tree_datasets[[varijanta]]$test$Satisfaction,
       prob_satisfied = tuned_tree_prob,
       model_name = paste(
-        "Drvo odlucivanja - podeseno -",
+        "Drvo odlučivanja - podešeno -",
         variant_labels[i]
       )
     )
@@ -3411,7 +3425,7 @@ rf_model
 
 ```{r}
 rf_variant_labels <- c(
-  "pojedinacne ocene",
+  "pojedinačne ocene",
   "zbirne ocene",
   "bez ocena usluga",
   "zbirne ocene bez Not_Rated_Count"
@@ -3613,7 +3627,7 @@ tuned_rf_evaluations <- setNames(
       actual = rf_datasets[[varijanta]]$test$Satisfaction,
       prob_satisfied = tuned_rf_prob,
       model_name = paste(
-        "Random forest - podeseni -",
+        "Random forest - podešeni -",
         rf_variant_labels[i]
       )
     )
@@ -3740,7 +3754,7 @@ gbm_prob <- predict(
 gbm_evaluation <- evaluate_model(
   actual = test_data$Satisfaction,
   prob_satisfied = gbm_prob,
-  model_name = "Gradient boosting - osnovni"
+  model_name = "Gradient boosting - osnovni - zbirne ocene"
 )
 
 # Prikaz metrika i matrice konfuzije
@@ -4053,23 +4067,43 @@ model_results_sorted
 
 ```{r}
 # Vizuelno poređenje modela prema AUC metrici
-ggplot(model_results, aes(x = reorder(Model, AUC), y = AUC, fill = Model)) +
-  geom_col(show.legend = FALSE) +
+top_models <- model_results %>%
+  arrange(desc(AUC)) %>%
+  slice_head(n = 10) %>%
+  mutate(Model = forcats::fct_reorder(Model, AUC)) %>%
+  select(Model, Accuracy, AUC) %>%
+  pivot_longer(
+    cols = c(Accuracy, AUC),
+    names_to = "Metrika",
+    values_to = "Vrednost"
+  )
+
+ggplot(top_models, aes(x = Model, y = Vrednost, fill = Metrika)) +
+  geom_col(position = position_dodge(width = 0.8)) +
   coord_flip() +
-  scale_y_continuous(limits = c(0, 1)) +
+  scale_y_continuous(
+    limits = c(0, 1),
+    labels = scales::percent_format()
+  ) +
+  scale_fill_manual(
+    values = c("Accuracy" = "#3498db", "AUC" = "#e67e22"),
+    labels = c("Accuracy" = "Tačnost", "AUC" = "AUC")
+  ) +
   theme_minimal() +
   labs(
-    title = "Poređenje modela prema AUC metrici na test skupu",
+    title = "Tačnost i AUC deset najboljih modela na test skupu",
+    subtitle = "Modeli su izabrani prema AUC-u",
     x = "Model",
-    y = "AUC"
+    y = "Vrednost metrike",
+    fill = "Metrika"
   )
 ```
 
-Iz priloženog grafikona jasno se vidi da najbolje rezultate ostvaruju modeli sa pojedinačnim ocenama usluga. Najviši AUC ima podešeni gradient boosting model (0,995), zatim podešeni random forest (0,994), osnovni random forest (0,994) i podešeno stablo (0,989).
+Najbolje rezultate na test skupu ostvaruju modeli sa pojedinačnim ocenama usluga. Podešeni gradient boosting postiže tačnost 0,9622 i AUC 0,9946; podešeni random forest je vrlo blizu, sa tačnošću 0,9620 i AUC-om 0,9944, a osnovni random forest postiže 0,9612 i 0,9936. Razlike između prva tri modela su male.
 
-Kod zbirnih ocena najbolji je podešeni gradient boosting sa AUC vrednošću 0,979, dok podešeni random forest ostvaruje AUC 0,976. Izbacivanje promenljive Not_Rated_Count smanjuje performanse modela sa zbirnim ocenama, naročito kod stabla i logističke regresije.
+Kod varijante sa zbirnim ocenama najbolji je podešeni gradient boosting (tačnost 0,9291; AUC 0,9786), dok su podešeni i osnovni random forest takođe slični (tačnost 0,9286 i 0,9287; AUC 0,9763 i 0,9755). U svim porodicama modela varijante sa ocenama nadmašuju one bez ocena. Uklanjanje Not_Rated_Count iz varijante sa zbirnim ocenama uglavnom snižava AUC: na primer, kod podešenog GBM-a sa 0,9786 na 0,9724.
 
-Modeli bez ocena usluga imaju znatno slabije rezultate. Najbolji među njima je podešeni gradient boosting sa AUC vrednošću 0,870, dok osnovno stablo ostvaruje AUC 0,794. Rezultati potvrđuju da pojedinačne ocene usluga sadrže najviše prediktivne informacije, a da Not_Rated_Count dodatno doprinosi predviđanju kod zbirnih ocena.
+Modeli bez ocena usluga imaju slabije rezultate. Najbolji je podešeni gradient boosting, sa tačnošću 0,8044 i AUC-om 0,8696. Ovi rezultati pokazuju da su ocene usluga veoma informativne za predviđanje zadovoljstva u ovom skupu, ali ne dokazuju uzročno-posledičnu vezu.
 
 # Model za produkciju
 
@@ -4340,3 +4374,12 @@ Za iste tri izmišljene putnike model bez ocena daje manje izražene verovatnoć
 ## Korišćenje modela i ograničenja
 
 Za produkcionu upotrebu sačuvana su dva trenirana `gbm` modela u direktorijumu `model/`: glavni model `gbm_produkcija.rds` (sa pojedinačnim ocenama usluga) i pomoćni model `gbm_produkcija_bez_ocena.rds` (samo sa podacima o putniku i letu, za procenu pre ankete). Modeli se mogu koristiti samostalno bez pokretanja celog `.Rmd` izveštaja preko skripte `produkcija.R`, u kojoj se podaci pripremaju funkcijom `prepare_passenger()`, a predikcije dobijaju pozivom funkcija `predict_satisfaction()` i `predict_satisfaction_bez_ocena()`. Ulazni podaci se prosleđuju kao `data.frame` sa nazivima kolona razdvojenim donjim crtama, ocenama usluga kao celim brojevima od `0` do `5` (gde `0` označava da usluga nije ocenjena) i kašnjenjem u minutima, pri čemu su obavezne kolone `Gender`, `Customer_Type`, `Age`, `Type_of_Travel`, `Class`, `Flight_Distance`, `Departure_Delay_in_Minutes` i svih 13 kolona ocena usluga, dok je `Arrival_Delay_in_Minutes` opcionalna i zamenjuje se kašnjenjem pri polasku ako nedostaje. Pošto su ocene usluga i zadovoljstvo prikupljeni u istoj anketi, glavni model procenjuje zadovoljstvo na osnovu već popunjene ankete, dok model bez ocena služi samo za grubu orijentaciju pre ankete. Dodatno, glavni model je veoma osetljiv na vrednost `0` (`Not_Rated_Count`), pa nulu treba unositi samo kada usluga zaista nije ocenjena i takve predikcije tumačiti uz oprez.
+
+
+## Zaključak projekta
+
+Analizom skupa od 129.880 putnika ispitani su demografski podaci, karakteristike letova i ocene usluga povezane sa zadovoljstvom. Nedostajuće vrednosti kašnjenja pri dolasku popunjene su kašnjenjem pri polasku, a feature engineering-om su izvedeni broj neocenjenih usluga, razlika kašnjenja i zbirne ocene usluga. Analize ukazuju na povezanost zadovoljstva sa svrhom i klasom putovanja, lojalnošću korisnika i ocenama usluga, ali same po sebi ne dokazuju uzročno-posledične veze.
+
+Najbolje rezultate na test skupu ostvarili su modeli sa pojedinačnim ocenama usluga: podešeni GBM je postigao tačnost 0,9622 i AUC 0,9946, a podešeni random forest tačnost 0,9620 i AUC 0,9944. Model bez ocena usluga bio je znatno slabiji, što pokazuje da su ocene važne za predviđanje u ovom skupu, ali ograničava korišćenje glavnog modela pre popunjavanja ankete.
+
+Rezultate treba tumačiti uz nekoliko ograničenja. Ocene usluga i zadovoljstvo prikupljeni su u istoj anketi, pa glavni model procenjuje zadovoljstvo na osnovu već datih ocena. Broj neocenjenih usluga takođe je povezan sa predikcijom; ocena 0 označava neocenjenu uslugu, a ne najnižu ocenu. Pored toga, EDA i PCA sprovedeni su pre podele na trening i test skup, pa je test skup mogao uticati na istraživački izbor obeležja i zbirnih ocena. Zato rezultate treba posmatrati kao početnu procenu, a u nastavku PCA i izbor obeležja sprovesti samo na trening podacima, pa potvrditi performanse na nezavisnim podacima.
