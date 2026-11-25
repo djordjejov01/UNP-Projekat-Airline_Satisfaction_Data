@@ -3425,7 +3425,7 @@ kašnjenje zabeleženo je kod 7,06% letova.</p>
 <p>Rezultati pokazuju da više od polovine letova stiže bez kašnjenja,
 dok su velika kašnjenja zastupljena u manjem procentu. U poređenju sa
 kašnjenjem pri polasku, udeo letova sa velikim kašnjenjem nešto je veći
-pri dolasku (7,00% u odnosu na 6,91%). Kategorizacija omogućava
+pri dolasku (7,06% u odnosu na 6,91%). Kategorizacija omogućava
 pregledniju analizu i jednostavnije poređenje kašnjenja pri polasku i
 dolasku.</p>
 </div>
@@ -3925,7 +3925,7 @@ ocene numeričke promenljive.</p>
 <h2>Zaključak feature engineeringa</h2>
 <p>U ovoj fazi kreirano je 10 novih promenljivih. Kašnjenja pri polasku
 i dolasku kategorisana su u četiri kategorije, a utvrđeno je da su ona
-gotovo potpuno linearno povezana (r = 0,959), pa je kreirana promenljiva
+gotovo potpuno linearno povezana (r = 0,966), pa je kreirana promenljiva
 <code>Delay_Difference</code> koja izdvaja ono što se desilo tokom leta.
 Starost i dužina leta svrstane su u kategorije (<code>Age_Group</code>,
 <code>Flight_Distance_Category</code>), pri čemu je kod starosti uočena
@@ -3956,9 +3956,9 @@ pre izgradnje modela mašinskog učenja.</p>
 <h2>Korelaciona analiza numeričkih i ordinalnih promenljivih</h2>
 <p>U okviru ovog koraka ispitaćemo linearne i monotonske veze između
 numeričkih i ordinalnih promenljivih u skupu podataka. S obzirom na to
-da ocene usluga predstavljaju ordinalne promenljive (na skali od 0 do
-5), a pojedine numeričke promenljivosti (poput vremena kašnjenja) imaju
-izraženu asimetriju, za procenu povezanosti koristićemo
+da ocene usluga predstavljaju ordinalne promenljive (na skali od 1 do 5,
+0 znači neocenjeno), a pojedine numeričke promenljivosti (poput vremena
+kašnjenja) imaju izraženu asimetriju, za procenu povezanosti koristićemo
 <strong>Spearmanov koeficijent korelacije</strong>, koji je robustan na
 ekstremne vrednosti i ne zahteva normalnu raspodelu podataka.</p>
 <pre class="r"><code># 1. Priprema numeričke verzije ciljne promenljive radi korelacije
@@ -4048,7 +4048,7 @@ određenih promenljivih. Najveću korelaciju među ulaznim karakteristikama
 ostvaruju kašnjenje pri dolasku i kašnjenje pri polasku (r = 0,736), što
 ukazuje na visoku redundantnost i postojanje multikolinearnosti.
 Spearmanov koeficijent iznosi 0,736, dok je Pearsonov koeficijent iz
-inženjeringa obeležja iznosio 0,959, jer je više od polovine vrednosti
+inženjeringa obeležja iznosio 0,966, jer je više od polovine vrednosti
 kašnjenja jednako nuli, pa u Spearmanovoj analizi postoji veliki broj
 izjednačenih rangova.</p>
 <p>Ovakav rezultat ukazuje na to da se pojedine ocene usluga kreću
@@ -5007,8 +5007,8 @@ round(sort(vif_values, decreasing = TRUE), 2)</code></pre>
 ##                    GenderMale 
 ##                          1.00</code></pre>
 <p>Rezultati pokazuju da je multikolinearnost prisutna samo kod dve
-promenljive: kašnjenje pri dolasku (VIF = 12,58) i kašnjenje pri polasku
-(VIF = 12,57) imaju vrednosti veće od 10, što potvrđuje da nose gotovo
+promenljive: kašnjenje pri dolasku (VIF = 14,82) i kašnjenje pri polasku
+(VIF = 14,82) imaju vrednosti veće od 10, što potvrđuje da nose gotovo
 istu informaciju, u skladu sa ranije utvrđenom korelacijom od 0,959. Sve
 ostale promenljive imaju VIF ispod 2,1, pa među njima ne postoji problem
 multikolinearnosti. Četiri nove zbirne ocene imaju vrednosti od 1,05 do
@@ -5064,19 +5064,13 @@ AIC(full_model, model_dep_diff, model_dep_only, model_arr_only)</code></pre>
 ## model_dep_diff 14 84057.03
 ## model_dep_only 13 84157.68
 ## model_arr_only 13 84072.83</code></pre>
-<p>Model sa kašnjenjem pri polasku i razlikom
-(<code>Delay_Difference</code>) ima isti AIC (84058,89) kao model sa oba
-kašnjenja, jer je to isti model zapisan na drugi način (kašnjenje pri
-dolasku je zbir kašnjenja pri polasku i razlike), ali bez
-multikolinearnosti: najveći VIF je 2,07 (<code>ClassEco</code>), a
-kašnjenje pri polasku i razlika imaju VIF 1,01. Model samo sa kašnjenjem
-pri polasku ima za oko 99 veći AIC (84157,68), pa je znatno lošiji, dok
-model samo sa kašnjenjem pri dolasku ima za oko 11 veći AIC (84069,89),
-što je blizu granice jasne razlike. Prema tome, kašnjenje pri dolasku
-nosi više informacije o zadovoljstvu nego kašnjenje pri polasku, a
-razlika <code>Delay_Difference</code> dodaje informaciju koja nedostaje
-kada se koristi samo kašnjenje pri polasku. Treba imati u vidu da je
-razlika od 11 jedinica mala u odnosu na ukupnu vrednost AIC.</p>
+<p>Model sa kašnjenjem pri polasku i razlikom (Delay_Difference) ima
+isti AIC (84.057,03) kao model sa kašnjenjem pri polasku i dolasku.
+Model samo sa kašnjenjem pri polasku ima AIC 84.157,68, odnosno oko
+100,65 više, dok model samo sa kašnjenjem pri dolasku ima AIC 84.072,83,
+odnosno oko 15,80 više. Zato model sa polaznim kašnjenjem i razlikom
+zadržava informaciju o oba kašnjenja bez njihove multikolinearnosti. Po
+AIC-u je bolji od modela koji koristi samo jedno kašnjenje.</p>
 <p>U modelovanju koristimo kašnjenje pri polasku zajedno sa razlikom
 <code>Delay_Difference</code>, jer taj par čuva informacije oba
 kašnjenja bez multikolinearnosti. Kašnjenje pri dolasku ne koristimo

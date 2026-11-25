@@ -1,12 +1,12 @@
 ---
 title: "Airline satisfaction data"
 output:
-  word_document:
-    reference_docx: template.docx
   html_document:
     toc: true
     toc_float: true
     theme: cosmo
+  word_document:
+    reference_docx: template.docx
   pdf_document: default
 ---
 
@@ -1292,7 +1292,7 @@ arrival_delay_summary
 ```
 Na osnovu dobijenih rezultata, može se uočiti da 56,13% letova nije imalo kašnjenje pri dolasku. Malo kašnjenje zabeleženo je kod 20,98% letova, dok je umereno kašnjenje prisutno kod 15,82% letova. Veliko kašnjenje zabeleženo je kod 7,06% letova.
 
-Rezultati pokazuju da više od polovine letova stiže bez kašnjenja, dok su velika kašnjenja zastupljena u manjem procentu. U poređenju sa kašnjenjem pri polasku, udeo letova sa velikim kašnjenjem nešto je veći pri dolasku (7,00% u odnosu na 6,91%). Kategorizacija omogućava pregledniju analizu i jednostavnije poređenje kašnjenja pri polasku i dolasku.
+Rezultati pokazuju da više od polovine letova stiže bez kašnjenja, dok su velika kašnjenja zastupljena u manjem procentu. U poređenju sa kašnjenjem pri polasku, udeo letova sa velikim kašnjenjem nešto je veći pri dolasku (7,06% u odnosu na 6,91%). Kategorizacija omogućava pregledniju analizu i jednostavnije poređenje kašnjenja pri polasku i dolasku.
 
 ### Poređenje kašnjenja pri polasku i dolasku
 
@@ -1628,7 +1628,7 @@ Skup podataka sada sadrži 129.880 opservacija i 32 promenljive, što znači da 
 
 ## Zaključak feature engineeringa
 
-U ovoj fazi kreirano je 10 novih promenljivih. Kašnjenja pri polasku i dolasku kategorisana su u četiri kategorije, a utvrđeno je da su ona gotovo potpuno linearno povezana (r = 0,959), pa je kreirana promenljiva `Delay_Difference` koja izdvaja ono što se desilo tokom leta. Starost i dužina leta svrstane su u kategorije (`Age_Group`, `Flight_Distance_Category`), pri čemu je kod starosti uočena U-veza sa nezadovoljstvom. Klasa leta predstavljena je i kao uređeni faktor. Vrednosti 0 u ocenama usluga tretirane su kao neocenjene usluge, pa je kreiran `Not_Rated_Count`, a 13 ocena grupisano je u tri zbirne ocene, od kojih komfor i usluge tokom leta najviše razdvajaju zadovoljne od nezadovoljnih putnika.
+U ovoj fazi kreirano je 10 novih promenljivih. Kašnjenja pri polasku i dolasku kategorisana su u četiri kategorije, a utvrđeno je da su ona gotovo potpuno linearno povezana (r = 0,966), pa je kreirana promenljiva `Delay_Difference` koja izdvaja ono što se desilo tokom leta. Starost i dužina leta svrstane su u kategorije (`Age_Group`, `Flight_Distance_Category`), pri čemu je kod starosti uočena U-veza sa nezadovoljstvom. Klasa leta predstavljena je i kao uređeni faktor. Vrednosti 0 u ocenama usluga tretirane su kao neocenjene usluge, pa je kreiran `Not_Rated_Count`, a 13 ocena grupisano je u tri zbirne ocene, od kojih komfor i usluge tokom leta najviše razdvajaju zadovoljne od nezadovoljnih putnika.
 
 Sve veze uočene u ovoj fazi posmatrane su pojedinačno, pa mogu biti posledica drugih promenljivih. U narednoj sekciji prelazimo na multivarijantnu analizu, u kojoj ćemo ispitati zajedničko delovanje više promenljivih na zadovoljstvo putnika. Prvobitne tri zbirne ocene su u multivarijantnoj analizi, na osnovu PCA, zamenjene sa četiri nove (Cabin_Score, Booking_Score, Handling_Score, Digital_Score).
 
@@ -1638,7 +1638,7 @@ U prethodnim fazama sprovedena je eksplorativna analiza pojedinačnih promenljiv
 
 ## Korelaciona analiza numeričkih i ordinalnih promenljivih
 
-U okviru ovog koraka ispitaćemo linearne i monotonske veze između numeričkih i ordinalnih promenljivih u skupu podataka. S obzirom na to da ocene usluga predstavljaju ordinalne promenljive (na skali od 0 do 5), a pojedine numeričke promenljivosti (poput vremena kašnjenja) imaju izraženu asimetriju, za procenu povezanosti koristićemo **Spearmanov koeficijent korelacije**, koji je robustan na ekstremne vrednosti i ne zahteva normalnu raspodelu podataka.
+U okviru ovog koraka ispitaćemo linearne i monotonske veze između numeričkih i ordinalnih promenljivih u skupu podataka. S obzirom na to da ocene usluga predstavljaju ordinalne promenljive (na skali od 1 do 5, 0 znači neocenjeno), a pojedine numeričke promenljivosti (poput vremena kašnjenja) imaju izraženu asimetriju, za procenu povezanosti koristićemo **Spearmanov koeficijent korelacije**, koji je robustan na ekstremne vrednosti i ne zahteva normalnu raspodelu podataka.
 
 ```{r}
 # 1. Priprema numeričke verzije ciljne promenljive radi korelacije
@@ -1685,7 +1685,7 @@ high_corr_pairs <- cor_melted %>%
 head(high_corr_pairs, 10)
 ```
 
-Izlaz funkcije ukazuje na prisustvo značajne povezanosti između određenih promenljivih. Najveću korelaciju među ulaznim karakteristikama ostvaruju kašnjenje pri dolasku i kašnjenje pri polasku (r = 0,736), što ukazuje na visoku redundantnost i postojanje multikolinearnosti. Spearmanov koeficijent iznosi 0,736, dok je Pearsonov koeficijent iz inženjeringa obeležja iznosio 0,959, jer je više od polovine vrednosti kašnjenja jednako nuli, pa u Spearmanovoj analizi postoji veliki broj izjednačenih rangova.
+Izlaz funkcije ukazuje na prisustvo značajne povezanosti između određenih promenljivih. Najveću korelaciju među ulaznim karakteristikama ostvaruju kašnjenje pri dolasku i kašnjenje pri polasku (r = 0,736), što ukazuje na visoku redundantnost i postojanje multikolinearnosti. Spearmanov koeficijent iznosi 0,736, dok je Pearsonov koeficijent iz inženjeringa obeležja iznosio 0,966, jer je više od polovine vrednosti kašnjenja jednako nuli, pa u Spearmanovoj analizi postoji veliki broj izjednačenih rangova.
 
 Ovakav rezultat ukazuje na to da se pojedine ocene usluga kreću zajedno, što je razlog za grupisanje srodnih ocena. Opravdanost konkretnog grupisanja proverava se analizom glavnih komponenti u odeljku o strukturi ocena usluga.
 
@@ -2296,7 +2296,7 @@ x_matrix <- model.matrix(full_model)[, -1]   # matrica prediktora bez konstantno
 vif_values <- diag(solve(cor(x_matrix)))
 round(sort(vif_values, decreasing = TRUE), 2)
 ```
-Rezultati pokazuju da je multikolinearnost prisutna samo kod dve promenljive: kašnjenje pri dolasku (VIF = 12,58) i kašnjenje pri polasku (VIF = 12,57) imaju vrednosti veće od 10, što potvrđuje da nose gotovo istu informaciju, u skladu sa ranije utvrđenom korelacijom od 0,959. Sve ostale promenljive imaju VIF ispod 2,1, pa među njima ne postoji problem multikolinearnosti. Četiri nove zbirne ocene imaju vrednosti od 1,05 do 1,32, što znači da su međusobno dovoljno nezavisne da se koriste zajedno u modelu. Nešto više vrednosti kod `ClassEco` (2,07) i `Type_of_TravelPersonal Travel` (1,85) u skladu su sa povezanošću klase i svrhe putovanja utvrđenom u prethodnom delu analize, ali su daleko ispod granice od 5.
+Rezultati pokazuju da je multikolinearnost prisutna samo kod dve promenljive: kašnjenje pri dolasku (VIF = 14,82) i kašnjenje pri polasku (VIF = 14,82) imaju vrednosti veće od 10, što potvrđuje da nose gotovo istu informaciju, u skladu sa ranije utvrđenom korelacijom od 0,959. Sve ostale promenljive imaju VIF ispod 2,1, pa među njima ne postoji problem multikolinearnosti. Četiri nove zbirne ocene imaju vrednosti od 1,05 do 1,32, što znači da su međusobno dovoljno nezavisne da se koriste zajedno u modelu. Nešto više vrednosti kod `ClassEco` (2,07) i `Type_of_TravelPersonal Travel` (1,85) u skladu su sa povezanošću klase i svrhe putovanja utvrđenom u prethodnom delu analize, ali su daleko ispod granice od 5.
 
 ### Rešavanje multikolinearnosti kašnjenja
 
@@ -2322,7 +2322,7 @@ round(sort(diag(solve(cor(x_matrix_2))), decreasing = TRUE), 2)
 # Poređenje modela
 AIC(full_model, model_dep_diff, model_dep_only, model_arr_only)
 ```
-Model sa kašnjenjem pri polasku i razlikom (`Delay_Difference`) ima isti AIC (84058,89) kao model sa oba kašnjenja, jer je to isti model zapisan na drugi način (kašnjenje pri dolasku je zbir kašnjenja pri polasku i razlike), ali bez multikolinearnosti: najveći VIF je 2,07 (`ClassEco`), a kašnjenje pri polasku i razlika imaju VIF 1,01. Model samo sa kašnjenjem pri polasku ima za oko 99 veći AIC (84157,68), pa je znatno lošiji, dok model samo sa kašnjenjem pri dolasku ima za oko 11 veći AIC (84069,89), što je blizu granice jasne razlike. Prema tome, kašnjenje pri dolasku nosi više informacije o zadovoljstvu nego kašnjenje pri polasku, a razlika `Delay_Difference` dodaje informaciju koja nedostaje kada se koristi samo kašnjenje pri polasku. Treba imati u vidu da je razlika od 11 jedinica mala u odnosu na ukupnu vrednost AIC.
+Model sa kašnjenjem pri polasku i razlikom (Delay_Difference) ima isti AIC (84.057,03) kao model sa kašnjenjem pri polasku i dolasku. Model samo sa kašnjenjem pri polasku ima AIC 84.157,68, odnosno oko 100,65 više, dok model samo sa kašnjenjem pri dolasku ima AIC 84.072,83, odnosno oko 15,80 više. Zato model sa polaznim kašnjenjem i razlikom zadržava informaciju o oba kašnjenja bez njihove multikolinearnosti. Po AIC-u je bolji od modela koji koristi samo jedno kašnjenje.
 
 U modelovanju koristimo kašnjenje pri polasku zajedno sa razlikom `Delay_Difference`, jer taj par čuva informacije oba kašnjenja bez multikolinearnosti. Kašnjenje pri dolasku ne koristimo istovremeno sa njima.
 
