@@ -1,10 +1,13 @@
 ---
 title: "Airline satisfaction data"
 output:
-  word_document: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+  word_document:
     reference_docx: template.docx
   pdf_document: default
-  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -22,6 +25,16 @@ library(rpart)
 library(rpart.plot)
 library(randomForest)
 library(gbm)
+
+cache_rds <- function(path, expr) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  if (file.exists(path)) {
+    return(readRDS(path))
+  }
+  res <- eval.parent(substitute(expr))
+  saveRDS(res, path)
+  res
+}
 ```
 
 
@@ -2968,13 +2981,15 @@ grupe <- list(
   "Broj neocenjenih usluga"              = "Not_Rated_Count"
 )
 
-vaznost <- bind_rows(lapply(names(grupe), function(g) {
-  uzorak <- paste(grupe[[g]], collapse = "|")
-  ostalo <- term_labels[!grepl(uzorak, term_labels)]
-  f_red  <- as.formula(paste("Satisfied_Num ~", paste(ostalo, collapse = " + ")))
-  data.frame(Grupa = g, Porast_AIC = round(AIC(fit_lr(f_red)) - AIC(lr_final), 0))
-})) %>%
-  arrange(desc(Porast_AIC))
+vaznost <- cache_rds("../data/results/lr_vaznost.rds", {
+  bind_rows(lapply(names(grupe), function(g) {
+    uzorak <- paste(grupe[[g]], collapse = "|")
+    ostalo <- term_labels[!grepl(uzorak, term_labels)]
+    f_red  <- as.formula(paste("Satisfied_Num ~", paste(ostalo, collapse = " + ")))
+    data.frame(Grupa = g, Porast_AIC = round(AIC(fit_lr(f_red)) - AIC(lr_final), 0))
+  })) %>%
+    arrange(desc(Porast_AIC))
+})
 
 vaznost
 ```
@@ -3036,18 +3051,20 @@ tree_test  <- tree_datasets[["zbirne ocene"]]$test
 
 set.seed(123)
 
-tree_models <- lapply(names(tree_datasets), function(varijanta) {
-  set.seed(123)
-  rpart(
-    Satisfaction ~ .,
-    data = tree_datasets[[varijanta]]$train,
-    method = "class",
-    control = rpart.control(
-      cp = 0.01,
-      minbucket = 20,
-      xval = 5
+tree_models <- cache_rds("../data/results/tree_models.rds", {
+  lapply(names(tree_datasets), function(varijanta) {
+    set.seed(123)
+    rpart(
+      Satisfaction ~ .,
+      data = tree_datasets[[varijanta]]$train,
+      method = "class",
+      control = rpart.control(
+        cp = 0.01,
+        minbucket = 20,
+        xval = 5
+      )
     )
-  )
+  })
 })
 
 names(tree_models) <- names(tree_datasets)
@@ -3166,18 +3183,20 @@ Osnovno stablo je formirano sa početnom vrednošću parametra složenosti `cp =
 ```{r}
 set.seed(123)
 
-tree_cv_models <- lapply(names(tree_datasets), function(varijanta) {
-  set.seed(123)
-  rpart(
-    Satisfaction ~ .,
-    data = tree_datasets[[varijanta]]$train,
-    method = "class",
-    control = rpart.control(
-      cp = 0,
-      minbucket = 20,
-      xval = 5
+tree_cv_models <- cache_rds("../data/results/tree_cv_models.rds", {
+  lapply(names(tree_datasets), function(varijanta) {
+    set.seed(123)
+    rpart(
+      Satisfaction ~ .,
+      data = tree_datasets[[varijanta]]$train,
+      method = "class",
+      control = rpart.control(
+        cp = 0,
+        minbucket = 20,
+        xval = 5
+      )
     )
-  )
+  })
 })
 
 names(tree_cv_models) <- names(tree_datasets)
@@ -3364,21 +3383,21 @@ Za početni model koristićemo 100 stabala odlučivanja. Broj promenljivih koje 
 ```{r}
 rf_datasets <- tree_datasets
 
-rf_models <- lapply(names(rf_datasets), function(varijanta) {
-  set.seed(123)
+rf_models <- cache_rds("../data/results/rf_models.rds", {
+  lapply(names(rf_datasets), function(varijanta) {
+    set.seed(123)
 
-  randomForest(
-    Satisfaction ~ .,
-    data = rf_datasets[[varijanta]]$train,
-    ntree = 100,
-    importance = TRUE
-  )
+    randomForest(
+      Satisfaction ~ .,
+      data = rf_datasets[[varijanta]]$train,
+      ntree = 100,
+      importance = TRUE
+    )
+  })
 })
 
 names(rf_models) <- names(rf_datasets)
 
-# Glavni model za postojeće tekstualne delove:
-# zbirne ocene + Not_Rated_Count
 rf_model <- rf_models[["zbirne ocene"]]
 
 rf_train <- rf_datasets[["zbirne ocene"]]$train
@@ -3493,31 +3512,33 @@ OOB greške, koristeći isključivo trening skup. Test skup se ne koristi za izb
 parametra.
 
 ```{r}
-rf_tuning <- bind_rows(
-  lapply(seq_along(rf_datasets), function(i) {
-    train_data <- rf_datasets[[i]]$train
-    mtry_values <- seq_len(ncol(train_data) - 1)
+rf_tuning <- cache_rds("../data/results/rf_tuning.rds", {
+  bind_rows(
+    lapply(seq_along(rf_datasets), function(i) {
+      rf_train_sub <- rf_datasets[[i]]$train
+      mtry_values <- seq_len(ncol(rf_train_sub) - 1)
 
-    set.seed(123)
+      set.seed(123)
 
-    bind_rows(
-      lapply(mtry_values, function(m) {
-        model <- randomForest(
-          Satisfaction ~ .,
-          data = train_data,
-          ntree = 100,
-          mtry = m
-        )
+      bind_rows(
+        lapply(mtry_values, function(m) {
+          model <- randomForest(
+            Satisfaction ~ .,
+            data = rf_train_sub,
+            ntree = 100,
+            mtry = m
+          )
 
-        data.frame(
-          Varijanta = paste0("varijanta_", i),
-          mtry = m,
-          OOB_Error = model$err.rate[100, "OOB"]
-        )
-      })
-    )
-  })
-)
+          data.frame(
+            Varijanta = paste0("varijanta_", i),
+            mtry = m,
+            OOB_Error = model$err.rate[100, "OOB"]
+          )
+        })
+      )
+    })
+  )
+})
 
 rf_tuning
 ```
@@ -3555,20 +3576,22 @@ Optimalna vrednost parametra mtry zavisi od varijante skupa promenljivih. Varija
 
 
 ```{r}
-tuned_rf_models <- setNames(
-  lapply(seq_along(rf_datasets), function(i) {
-    set.seed(123)
+tuned_rf_models <- cache_rds("../data/results/tuned_rf_models.rds", {
+  setNames(
+    lapply(seq_along(rf_datasets), function(i) {
+      set.seed(123)
 
-    randomForest(
-      Satisfaction ~ .,
-      data = rf_datasets[[i]]$train,
-      ntree = 100,
-      mtry = unname(best_mtry[i]),
-      importance = TRUE
-    )
-  }),
-  names(rf_datasets)
-)
+      randomForest(
+        Satisfaction ~ .,
+        data = rf_datasets[[i]]$train,
+        ntree = 100,
+        mtry = unname(best_mtry[i]),
+        importance = TRUE
+      )
+    }),
+    names(rf_datasets)
+  )
+})
 
 tuned_rf_model <- tuned_rf_models[["zbirne ocene"]]
 
@@ -3678,24 +3701,26 @@ U ovom koraku treniramo osnovni model sa 300 stabala, dubinom interakcije (maksi
 
 set.seed(123)
 
-# Priprema podataka za gbm nad zajednickim skupovima train_data i test_data
 gbm_train <- train_data %>%
   select(Satisfied_Num, all_of(vars_scores))
 
 gbm_test <- test_data %>%
   select(Satisfied_Num, all_of(vars_scores))
 
-gbm_model <- gbm(
-  Satisfied_Num ~ .,
-  data = gbm_train,
-  distribution = "bernoulli",
-  n.trees = 300,
-  interaction.depth = 4,
-  shrinkage = 0.05,
-  bag.fraction = 0.8,
-  train.fraction = 1.0,
-  verbose = FALSE
-)
+gbm_model <- cache_rds("../data/results/gbm_base_model.rds", {
+  set.seed(123)
+  gbm(
+    Satisfied_Num ~ .,
+    data = gbm_train,
+    distribution = "bernoulli",
+    n.trees = 300,
+    interaction.depth = 4,
+    shrinkage = 0.05,
+    bag.fraction = 0.8,
+    train.fraction = 1.0,
+    verbose = FALSE
+  )
+})
 
 gbm_model
 ```
@@ -3742,39 +3767,41 @@ gbm_tuning <- expand.grid(
   shrinkage = c(0.05, 0.1)
 )
 
-gbm_tuning_results <- lapply(seq_len(nrow(gbm_tuning)), function(i) {
-  params <- gbm_tuning[i, ]
+gbm_tuning_results <- cache_rds("../data/results/gbm_tuning_results.rds", {
+  res_list <- lapply(seq_len(nrow(gbm_tuning)), function(i) {
+    params <- gbm_tuning[i, ]
 
-  set.seed(123)
+    set.seed(123)
 
-  model <- gbm(
-    Satisfied_Num ~ .,
-    data = gbm_train,
-    distribution = "bernoulli",
-    n.trees = 3000,
-    interaction.depth = params$interaction.depth,
-    shrinkage = params$shrinkage,
-    bag.fraction = 0.8,
-    train.fraction = 1.0,
-    cv.folds = 5,
-    verbose = FALSE
-  )
+    model <- gbm(
+      Satisfied_Num ~ .,
+      data = gbm_train,
+      distribution = "bernoulli",
+      n.trees = 3000,
+      interaction.depth = params$interaction.depth,
+      shrinkage = params$shrinkage,
+      bag.fraction = 0.8,
+      train.fraction = 1.0,
+      cv.folds = 5,
+      verbose = FALSE
+    )
 
-  best_trees <- gbm.perf(
-    model,
-    method = "cv",
-    plot.it = FALSE
-  )
+    best_trees <- gbm.perf(
+      model,
+      method = "cv",
+      plot.it = FALSE
+    )
 
-  data.frame(
-    interaction.depth = params$interaction.depth,
-    shrinkage = params$shrinkage,
-    best_trees = best_trees,
-    cv_error = min(model$cv.error)
-  )
+    data.frame(
+      interaction.depth = params$interaction.depth,
+      shrinkage = params$shrinkage,
+      best_trees = best_trees,
+      cv_error = min(model$cv.error)
+    )
+  })
+
+  bind_rows(res_list)
 })
-
-gbm_tuning_results <- bind_rows(gbm_tuning_results)
 
 gbm_tuning_results
 ```
@@ -3798,19 +3825,20 @@ best_depth <- best_gbm$interaction.depth[[1]]
 best_shrinkage <- best_gbm$shrinkage[[1]]
 best_n_trees <- best_gbm$best_trees[[1]]
 
-set.seed(123)
-
-tuned_gbm_model <- gbm(
-  Satisfied_Num ~ .,
-  data = gbm_train,
-  distribution = "bernoulli",
-  n.trees = best_n_trees,
-  interaction.depth = best_depth,
-  shrinkage = best_shrinkage,
-  bag.fraction = 0.8,
-  train.fraction = 1.0,
-  verbose = FALSE
-)
+tuned_gbm_model <- cache_rds("../data/results/tuned_gbm_model.rds", {
+  set.seed(123)
+  gbm(
+    Satisfied_Num ~ .,
+    data = gbm_train,
+    distribution = "bernoulli",
+    n.trees = best_n_trees,
+    interaction.depth = best_depth,
+    shrinkage = best_shrinkage,
+    bag.fraction = 0.8,
+    train.fraction = 1.0,
+    verbose = FALSE
+  )
+})
 
 tuned_gbm_prob <- predict(
   tuned_gbm_model,
@@ -3862,36 +3890,39 @@ gbm_datasets <- list(
   )
 )
 
-tuned_gbm_variants <- lapply(names(gbm_datasets), function(varijanta) {
-  set.seed(123)
+tuned_gbm_variants <- cache_rds("../data/results/tuned_gbm_variants.rds", {
+  var_list <- lapply(names(gbm_datasets), function(varijanta) {
+    set.seed(123)
 
-  model <- gbm(
-    Satisfied_Num ~ .,
-    data = gbm_datasets[[varijanta]]$train,
-    distribution = "bernoulli",
-    n.trees = best_n_trees,
-    interaction.depth = best_depth,
-    shrinkage = best_shrinkage,
-    bag.fraction = 0.8,
-    train.fraction = 1.0,
-    verbose = FALSE
-  )
+    model <- gbm(
+      Satisfied_Num ~ .,
+      data = gbm_datasets[[varijanta]]$train,
+      distribution = "bernoulli",
+      n.trees = best_n_trees,
+      interaction.depth = best_depth,
+      shrinkage = best_shrinkage,
+      bag.fraction = 0.8,
+      train.fraction = 1.0,
+      verbose = FALSE
+    )
 
-  prob <- predict(
-    model,
-    newdata = gbm_datasets[[varijanta]]$test,
-    n.trees = best_n_trees,
-    type = "response"
-  )
+    prob <- predict(
+      model,
+      newdata = gbm_datasets[[varijanta]]$test,
+      n.trees = best_n_trees,
+      type = "response"
+    )
 
-  evaluate_model(
-    actual = test_data$Satisfaction,
-    prob_satisfied = prob,
-    model_name = paste("Gradient boosting - podešeni -", varijanta)
-  )
+    evaluate_model(
+      actual = test_data$Satisfaction,
+      prob_satisfied = prob,
+      model_name = paste("Gradient boosting - podešeni -", varijanta)
+    )
+  })
+
+  names(var_list) <- names(gbm_datasets)
+  var_list
 })
-
-names(tuned_gbm_variants) <- names(gbm_datasets)
 
 tuned_gbm_variant_metrics <- bind_rows(
   lapply(tuned_gbm_variants, `[[`, "metrics")
